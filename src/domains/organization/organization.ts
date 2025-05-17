@@ -9,3 +9,9 @@ export class Organization {
     public displayName: OrganizationDisplayName,
   ) {}
 }
+
+export {
+  OrganizationId,
+  OrganizationName,
+  OrganizationDisplayName,
+}

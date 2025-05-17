@@ -9,3 +9,9 @@ export class User {
     public email: Email,
   ) {}
 }
+
+export {
+  UserId,
+  UserName,
+  Email,
+}
