@@ -1,13 +1,13 @@
 import { OrganizationId } from '../../domains/organization/organization.js'
 import { QueryUserRecord, UserQueryRepository } from '../../infrastructures/postgresql/userQueryRepository.js'
-import { FunctionContext, KeycloakLib, PostgresqlLib } from '../../runtime/functionContext.js'
+import { createFunctionContext, FunctionContext, PostgresqlLib } from '../../runtime/functionContext.js'
 import { v4 as uuidv4 } from 'uuid'
 import { queryUser } from './queryUsers.js'
 
 describe('queryUser', () => {
   const context: FunctionContext = {
-    Keycloak: new KeycloakLib(),
-    Postgresql: new PostgresqlLib(),
+    ...createFunctionContext(),
+    postgresql: new PostgresqlLib(),
   }
   const organizationId = new OrganizationId(uuidv4())
   const users: QueryUserRecord[] = [
@@ -31,8 +31,8 @@ describe('queryUser', () => {
   test.fails('PostgreSQL接続情報がないと初期化エラー', async () => {
     // arrange
     const withoutPostgresqlContext: FunctionContext = {
-      ...context,
-      Postgresql: undefined,
+      ...createFunctionContext(),
+      postgresql: undefined,
     }
     vi.stubEnv('DB_ENV', 'local')
 

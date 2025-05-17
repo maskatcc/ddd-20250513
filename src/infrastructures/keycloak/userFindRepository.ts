@@ -5,7 +5,7 @@ export class UserFindRepository {
   readonly keycloak: KeycloakLib
 
   constructor(private readonly context: FunctionContext) {
-    this.keycloak = context.Keycloak
+    this.keycloak = context.keycloak
   }
 
   async findByEmail(_email: Email): Promise<User | undefined> {

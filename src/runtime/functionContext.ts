@@ -1,13 +1,23 @@
+import { Context as LambdaContext } from 'aws-lambda'
 import { KeycloakLib } from './keycloakLib.js'
 import { PostgresqlLib } from './postgresqlLib.js'
 
 type FunctionContext = {
-  Keycloak: KeycloakLib
-  Postgresql?: PostgresqlLib
+  lambdaContext: LambdaContext
+  keycloak: KeycloakLib
+  postgresql?: PostgresqlLib
+}
+
+function createFunctionContext(lambdaContext?: LambdaContext): FunctionContext {
+  return {
+    lambdaContext: lambdaContext ?? {} as LambdaContext,
+    keycloak: new KeycloakLib(),
+  }
 }
 
 export {
-  FunctionContext,
+  type FunctionContext,
+  createFunctionContext,
   KeycloakLib,
   PostgresqlLib,
 }

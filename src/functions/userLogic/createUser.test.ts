@@ -4,14 +4,12 @@ import { UserCreateRepository } from '../../infrastructures/keycloak/userCreateR
 import { UserEmailRepository } from '../../infrastructures/keycloak/userEmailRepository.js'
 import { UserFindRepository } from '../../infrastructures/keycloak/userFindRepository.js'
 import { UserOrgsRepository } from '../../infrastructures/keycloak/userOrgsRepository.js'
-import { FunctionContext, KeycloakLib } from '../../runtime/functionContext.js'
+import { createFunctionContext } from '../../runtime/functionContext.js'
 import { createUser } from './createUser.js'
 import { v4 as uuidv4 } from 'uuid'
 
 describe('createUser', () => {
-  const context: FunctionContext = {
-    Keycloak: new KeycloakLib(),
-  }
+  const context = createFunctionContext()
   const organizationId = new OrganizationId(uuidv4())
   const email = new Email('taro@company.net')
   const userName = new UserName('Taro')

@@ -6,7 +6,7 @@ export class UserEmailRepository {
   readonly keycloak: KeycloakLib
 
   constructor(private readonly context: FunctionContext) {
-    this.keycloak = context.Keycloak
+    this.keycloak = context.keycloak
   }
 
   async invite(_id: UserId, _orgId: OrganizationId): Promise<void> {

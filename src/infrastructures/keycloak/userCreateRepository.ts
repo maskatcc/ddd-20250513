@@ -5,7 +5,7 @@ export class UserCreateRepository {
   readonly keycloak: KeycloakLib
 
   constructor(private readonly context: FunctionContext) {
-    this.keycloak = context.Keycloak
+    this.keycloak = context.keycloak
   }
 
   async create(name: UserName, email: Email): Promise<UserId> {

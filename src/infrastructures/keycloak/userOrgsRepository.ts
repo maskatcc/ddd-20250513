@@ -6,7 +6,7 @@ export class UserOrgsRepository {
   readonly keycloak: KeycloakLib
 
   constructor(private readonly context: FunctionContext) {
-    this.keycloak = context.Keycloak
+    this.keycloak = context.keycloak
   }
 
   async joinOrganization(_id: UserId, _orgId: OrganizationId): Promise<void> {
