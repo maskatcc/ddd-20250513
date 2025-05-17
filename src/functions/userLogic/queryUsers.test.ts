@@ -2,9 +2,9 @@ import { OrganizationId } from '../../domains/organization/organization.js'
 import { QueryUserRecord, UserQueryRepository } from '../../infrastructures/postgresql/userQueryRepository.js'
 import { createFunctionContext, FunctionContext, PostgresqlLib } from '../../runtime/functionContext.js'
 import { v4 as uuidv4 } from 'uuid'
-import { queryUser } from './queryUsers.js'
+import { queryUsers } from './queryUsers.js'
 
-describe('queryUser', () => {
+describe('queryUsers', () => {
   const context: FunctionContext = {
     ...createFunctionContext(),
     postgresql: new PostgresqlLib(),
@@ -21,7 +21,7 @@ describe('queryUser', () => {
     const querySpy = vi.spyOn(UserQueryRepository.prototype, 'query').mockResolvedValue(users)
 
     // act
-    const result = await queryUser({ organizationId }, context)
+    const result = await queryUsers({ organizationId }, context)
 
     // assert
     expect(result).toEqual(users)
@@ -37,6 +37,6 @@ describe('queryUser', () => {
     vi.stubEnv('DB_ENV', 'local')
 
     // act
-    await queryUser({ organizationId }, withoutPostgresqlContext)
+    await queryUsers({ organizationId }, withoutPostgresqlContext)
   })
 })
