@@ -1,30 +1,28 @@
-import { Context as LambdaContext, APIGatewayProxyResult, APIGatewayProxyEvent } from 'aws-lambda'
+import middy from '@middy/core'
+import { parser } from '@aws-lambda-powertools/parser/middleware'
+import { Context as LambdaContext, APIGatewayProxyResult } from 'aws-lambda'
 import { createFunctionContext } from '../../runtime/functionContext.js'
 import { createUser } from '../../functions/userLogic/createUser.js'
 import { OrganizationId } from '../../domains/organization/organization.js'
 import { Email, UserName } from '../../domains/user/user.js'
+import { CreateUserEvent, CreateUserEventSchema } from './schema.js'
 
-export async function handler(event: APIGatewayProxyEvent, lambdaContext: LambdaContext): Promise<APIGatewayProxyResult> {
-  // console.log('APIGatewayProxyEvent:', JSON.stringify(event, null, 2))
-  // console.log('LambdaContext:', JSON.stringify(lambdaContext, null, 2))
+async function lambdaHandler(event: CreateUserEvent, lambdaContext: LambdaContext): Promise<APIGatewayProxyResult> {
+  const authorizer = event.requestContext.authorizer.lambda
+  const input = {
+    organizationId: new OrganizationId(authorizer.context.organizationId),
+    email: new Email(event.body.email),
+    userName: new UserName(event.body.userName),
+  }
 
-  const authorizerContext = JSON.parse(event.requestContext.authorizer?.context || '{}')
-  const requestPayload = JSON.parse(event.body || '{}')
-  const { organizationId } = authorizerContext
-  const { email, userName } = requestPayload
+  const userId = await createUser(input, createFunctionContext(lambdaContext))
 
-  const userId = await createUser({
-    organizationId: new OrganizationId(organizationId),
-    email: new Email(email),
-    userName: new UserName(userName),
-  }, createFunctionContext(lambdaContext))
-
-  const result: APIGatewayProxyResult = {
+  return {
     statusCode: 200,
     body: JSON.stringify({ userId: userId.value }),
   }
-
-  // console.log('APIGatewayProxyResult:', JSON.stringify(result, null, 2))
-
-  return result
 }
+
+export const handler = middy()
+  .use(parser({ schema: CreateUserEventSchema }))
+  .handler(lambdaHandler)

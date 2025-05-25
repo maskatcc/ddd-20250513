@@ -1,55 +1,54 @@
-import { APIGatewayProxyEvent } from 'aws-lambda'
+import { z } from 'zod'
+import { APIGatewayProxyEventV2Schema } from '@aws-lambda-powertools/parser/schemas'
 
-export const eventTemplate: APIGatewayProxyEvent = {
-  resource: '/request',
-  path: '/request',
-  httpMethod: 'GET',
+type APIGatewayProxyEventV2 = z.infer<typeof APIGatewayProxyEventV2Schema>
+
+// Create AWS Lambda proxy integrations for HTTP APIs in API Gateway - Amazon API Gateway
+// https://docs.aws.amazon.com/apigateway/latest/developerguide/http-api-develop-integrations-lambda.html
+export const eventTemplate: APIGatewayProxyEventV2 = {
+  version: '2.0',
+  routeKey: '$default',
+  rawPath: '/my/path',
+  rawQueryString: 'parameter1=value1&parameter1=value2&parameter2=value',
+  cookies: undefined,
   headers: {
     'X-AMZ-Date': '20231001T000000Z',
     'Accept': 'application/json',
     'Content-Type': 'application/json',
   },
-  multiValueHeaders: {},
   queryStringParameters: {
-    QueryString1: 'queryValue1',
+    parameter1: 'value1,value2',
+    parameter2: 'value',
   },
-  multiValueQueryStringParameters: null,
-  stageVariables: null,
   requestContext: {
-    path: '/dev',
+    time: '2023-10-01T00:00:00Z',
     accountId: '123456789012',
-    resourceId: '',
-    stage: 'dev',
-    domainPrefix: '',
-    requestId: '',
-    identity: {
-      cognitoIdentityPoolId: null,
-      cognitoIdentityId: null,
-      apiKey: '',
-      cognitoAuthenticationType: null,
-      userArn: null,
-      apiKeyId: '',
-      userAgent: '',
-      accountId: null,
-      caller: null,
-      sourceIp: '1.2.3.4',
-      accessKey: '',
-      cognitoAuthenticationProvider: null,
-      user: null,
-      clientCert: null,
-      principalOrgId: null,
-    },
-    domainName: '',
-    resourcePath: '/',
-    httpMethod: 'POST',
-    extendedRequestId: '',
     apiId: '',
-    authorizer: undefined,
-    protocol: '',
-    requestTime: '2025/04/01:00:00:00',
-    requestTimeEpoch: 123456789,
+    stage: 'dev',
+    requestId: '',
+    domainName: '',
+    domainPrefix: '',
+    routeKey: '$default',
+    http: {
+      path: '/request',
+      sourceIp: '1.2.3.4',
+      userAgent: '',
+      protocol: 'HTTP/1.1',
+      method: 'GET',
+    },
+    timeEpoch: 1696118400000,
+    authorizer: {
+      lambda: {
+        principalId: 'taro',
+        context: {
+          organizationId: 'xxx-xxxx-xxxx-xxx',
+        },
+      },
+    },
+    authentication: undefined,
   },
-  body: null,
+  body: undefined,
+  pathParameters: undefined,
   isBase64Encoded: false,
-  pathParameters: null,
+  stageVariables: undefined,
 }

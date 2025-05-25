@@ -1,4 +1,4 @@
-import { APIGatewayProxyResult, APIGatewayProxyEvent } from 'aws-lambda'
+import { APIGatewayProxyResult } from 'aws-lambda'
 import mockContext from 'aws-lambda-mock-context'
 import { OrganizationId } from '../../domains/organization/organization.js'
 import { handler } from './index.js'
@@ -6,6 +6,7 @@ import { eventTemplate } from '../commons/testEventTemplate.js'
 import { v4 as uuidv4 } from 'uuid'
 import * as functions from '../../functions/userLogic/queryUsers.js'
 import { QueryUserRecord } from '../../infrastructures/postgresql/userQueryRepository.js'
+import { QueryUsersEvent } from './schema.js'
 
 describe('lambda/queryUsers', () => {
   const organizationId = new OrganizationId(uuidv4())
@@ -16,12 +17,17 @@ describe('lambda/queryUsers', () => {
   ]
 
   test('対象ユーザーを問い合わせる', async () => {
-    const event: APIGatewayProxyEvent = {
+    const event: QueryUsersEvent = {
       ...eventTemplate,
       requestContext: {
         ...eventTemplate.requestContext,
         authorizer: {
-          context: JSON.stringify({ organizationId: organizationId.value }),
+          lambda: {
+            principalId: 'accountId',
+            context: {
+              organizationId: organizationId.value,
+            },
+          },
         },
       },
     }
