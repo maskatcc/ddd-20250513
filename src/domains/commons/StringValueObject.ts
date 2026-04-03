@@ -27,14 +27,16 @@ export class StringValueObject extends ImmutableValueObject<string> {
     this: new (v: string) => T,
     input: string,
   ): T | undefined {
-    if (implementsRequiredSpec(this)) {
-      if ((this as RequiredSpec).isRequired() && input === '') {
+    const proto = (this as unknown as { prototype: unknown }).prototype
+
+    if (implementsRequiredSpec(proto)) {
+      if (proto.isRequired() && input === '') {
         return undefined
       }
     }
 
-    if (implementsLengthSpec(this)) {
-      if ((this as LengthSpec).maxLength() < input.length) {
+    if (implementsLengthSpec(proto)) {
+      if (proto.maxLength() < input.length) {
         return undefined
       }
     }
