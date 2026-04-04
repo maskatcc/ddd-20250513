@@ -2,9 +2,6 @@ import { OrganizationId } from '../../domains/organization/organization.js'
 import { IUserQueryService, type UserQueryResult } from '../../domains/user/repositories/IUserQueryService.js'
 import { FunctionContext, PostgresqlLib } from '../../runtime/functionContext.js'
 
-/** @deprecated ドメイン層の UserQueryResult を使用してください */
-export type QueryUserRecord = UserQueryResult
-
 export class PostgresqlUserQueryRepository implements IUserQueryService {
   readonly postgresql: PostgresqlLib
 

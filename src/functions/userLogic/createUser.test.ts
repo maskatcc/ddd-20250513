@@ -1,15 +1,10 @@
 import { OrganizationId } from '../../domains/organization/organization.js'
 import { Email, User, UserId, UserName } from '../../domains/user/user.js'
-import { UserCreateRepository } from '../../infrastructures/keycloak/userCreateRepository.js'
-import { KeycloakUserNotificationRepository } from '../../infrastructures/keycloak/keycloakUserNotificationRepository.js'
-import { KeycloakUserOrganizationRepository } from '../../infrastructures/keycloak/keycloakUserOrganizationRepository.js'
-import { UserFindRepository } from '../../infrastructures/keycloak/userFindRepository.js'
-import { createFunctionContext } from '../../runtime/functionContext.js'
-import { createUser } from './createUser.js'
+import { IUserRepository, IUserOrganizationRepository, IUserNotificationRepository } from '../../domains/user/repositories/index.js'
+import { createUser, CreateUserDeps } from './createUser.js'
 import { v4 as uuidv4 } from 'uuid'
 
 describe('createUser', () => {
-  const context = createFunctionContext()
   const organizationId = new OrganizationId(uuidv4())
   const email = new Email('taro@company.net')
   const userName = new UserName('Taro')
@@ -19,51 +14,83 @@ describe('createUser', () => {
     const createdUser = new User(userId, userName, email)
 
     // arrange
-    const findByEmailSpy = vi.spyOn(UserFindRepository.prototype, 'findByEmail').mockResolvedValue(undefined)
-    const createSpy = vi.spyOn(UserCreateRepository.prototype, 'create').mockResolvedValue(userId)
-    const findByIdSpy = vi.spyOn(UserFindRepository.prototype, 'findById').mockResolvedValue(createdUser)
-    const joinOrganizationSpy = vi.spyOn(KeycloakUserOrganizationRepository.prototype, 'joinOrganization').mockResolvedValue(undefined)
-    const inviteSpy = vi.spyOn(KeycloakUserNotificationRepository.prototype, 'invite').mockResolvedValue(undefined)
-    const verifyEmailSpy = vi.spyOn(KeycloakUserNotificationRepository.prototype, 'verifyEmail').mockResolvedValue(undefined)
+    const mockUserRepository: IUserRepository = {
+      findByEmail: vi.fn().mockResolvedValue(undefined),
+      create: vi.fn().mockResolvedValue(userId),
+      findById: vi.fn().mockResolvedValue(createdUser),
+    }
+    const mockUserOrganizationRepository: IUserOrganizationRepository = {
+      joinOrganization: vi.fn().mockResolvedValue(undefined),
+    }
+    const mockUserNotificationRepository: IUserNotificationRepository = {
+      invite: vi.fn().mockResolvedValue(undefined),
+      verifyEmail: vi.fn().mockResolvedValue(undefined),
+    }
+    const deps: CreateUserDeps = {
+      userRepository: mockUserRepository,
+      userOrganizationRepository: mockUserOrganizationRepository,
+      userNotificationRepository: mockUserNotificationRepository,
+    }
 
     // act
-    const result = await createUser({ organizationId, email, userName }, context)
+    const result = await createUser({ organizationId, email, userName }, deps)
 
     // assert
     expect(result).toEqual(userId)
-    expect(findByEmailSpy).toHaveBeenCalledWith(email)
-    expect(createSpy).toHaveBeenCalledWith(userName, email)
-    expect(findByIdSpy).toHaveBeenCalledWith(userId)
-    expect(joinOrganizationSpy).toHaveBeenCalledWith(userId, organizationId)
-    expect(inviteSpy).toHaveBeenCalledWith(userId, organizationId)
-    expect(verifyEmailSpy).not.toHaveBeenCalled()
+    expect(mockUserRepository.findByEmail).toHaveBeenCalledWith(email)
+    expect(mockUserRepository.create).toHaveBeenCalledWith(userName, email)
+    expect(mockUserRepository.findById).toHaveBeenCalledWith(userId)
+    expect(mockUserOrganizationRepository.joinOrganization).toHaveBeenCalledWith(userId, organizationId)
+    expect(mockUserNotificationRepository.invite).toHaveBeenCalledWith(userId, organizationId)
+    expect(mockUserNotificationRepository.verifyEmail).not.toHaveBeenCalled()
   })
 
   test('ユーザーを作成してメールアドレス確認リクエストを送信する', async () => {
     const savedUser = new User(userId, userName, email)
 
     // arrange
-    const findByEmailSpy = vi.spyOn(UserFindRepository.prototype, 'findByEmail').mockResolvedValue(savedUser)
-    const joinOrganizationSpy = vi.spyOn(KeycloakUserOrganizationRepository.prototype, 'joinOrganization').mockResolvedValue(undefined)
-    const verifyEmailSpy = vi.spyOn(KeycloakUserNotificationRepository.prototype, 'verifyEmail').mockResolvedValue(undefined)
+    const mockUserRepository: IUserRepository = {
+      findByEmail: vi.fn().mockResolvedValue(savedUser),
+      create: vi.fn(),
+      findById: vi.fn(),
+    }
+    const mockUserOrganizationRepository: IUserOrganizationRepository = {
+      joinOrganization: vi.fn().mockResolvedValue(undefined),
+    }
+    const mockUserNotificationRepository: IUserNotificationRepository = {
+      invite: vi.fn(),
+      verifyEmail: vi.fn().mockResolvedValue(undefined),
+    }
+    const deps: CreateUserDeps = {
+      userRepository: mockUserRepository,
+      userOrganizationRepository: mockUserOrganizationRepository,
+      userNotificationRepository: mockUserNotificationRepository,
+    }
 
     // act
-    const result = await createUser({ organizationId, email, userName }, context)
+    const result = await createUser({ organizationId, email, userName }, deps)
 
     // assert
     expect(result).toEqual(userId)
-    expect(findByEmailSpy).toHaveBeenCalledWith(email)
-    expect(joinOrganizationSpy).toHaveBeenCalledWith(userId, organizationId)
-    expect(verifyEmailSpy).toHaveBeenCalledWith(userId)
+    expect(mockUserRepository.findByEmail).toHaveBeenCalledWith(email)
+    expect(mockUserOrganizationRepository.joinOrganization).toHaveBeenCalledWith(userId, organizationId)
+    expect(mockUserNotificationRepository.verifyEmail).toHaveBeenCalledWith(userId)
   })
 
   test.fails('作成したユーザーが取得できない想定外エラー', async () => {
     // arrange
-    vi.spyOn(UserFindRepository.prototype, 'findByEmail').mockResolvedValue(undefined)
-    vi.spyOn(UserCreateRepository.prototype, 'create').mockResolvedValue(userId)
-    vi.spyOn(UserFindRepository.prototype, 'findById').mockResolvedValue(undefined)
+    const mockUserRepository: IUserRepository = {
+      findByEmail: vi.fn().mockResolvedValue(undefined),
+      create: vi.fn().mockResolvedValue(userId),
+      findById: vi.fn().mockResolvedValue(undefined),
+    }
+    const deps: CreateUserDeps = {
+      userRepository: mockUserRepository,
+      userOrganizationRepository: { joinOrganization: vi.fn() },
+      userNotificationRepository: { invite: vi.fn(), verifyEmail: vi.fn() },
+    }
 
     // act
-    await createUser({ organizationId, email, userName }, context)
+    await createUser({ organizationId, email, userName }, deps)
   })
 })
