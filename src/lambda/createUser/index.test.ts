@@ -8,13 +8,18 @@ import { v4 as uuidv4 } from 'uuid'
 import * as functions from '../../functions/userLogic/createUser.js'
 import { CreateUserEvent } from './schema.js'
 
+vi.mock('../../runtime/keycloakGateway.js', () => ({
+  KeycloakGateway: vi.fn(),
+  KeycloakConfig: { fromEnvironment: vi.fn().mockResolvedValue({}) },
+}))
+
 describe('lambda/createUser', () => {
   const organizationId = new OrganizationId(uuidv4())
   const email = new Email('taro@company.net')
   const userName = new UserName('Taro')
   const userId = new UserId(uuidv4())
 
-  test('ユーザーを作成する', async () => {
+  it('ユーザーを作成する', async () => {
     const event: CreateUserEvent = {
       ...eventTemplate,
       requestContext: {

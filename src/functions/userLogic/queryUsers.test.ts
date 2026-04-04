@@ -1,42 +1,30 @@
 import { OrganizationId } from '../../domains/organization/organization.js'
-import { QueryUserRecord, UserQueryRepository } from '../../infrastructures/postgresql/userQueryRepository.js'
-import { createFunctionContext, FunctionContext, PostgresqlLib } from '../../runtime/functionContext.js'
+import { IUserQueryService, UserQueryResult } from '../../domains/user/repositories/index.js'
 import { v4 as uuidv4 } from 'uuid'
-import { queryUsers } from './queryUsers.js'
+import { queryUsers, QueryUsersDeps } from './queryUsers.js'
 
 describe('queryUsers', () => {
-  const context: FunctionContext = {
-    ...createFunctionContext(),
-    postgresql: new PostgresqlLib(),
-  }
   const organizationId = new OrganizationId(uuidv4())
-  const users: QueryUserRecord[] = [
+  const users: UserQueryResult[] = [
     { userId: uuidv4(), userName: 'Taro', email: 'taro@campany.net' },
     { userId: uuidv4(), userName: 'Hanako', email: 'hanako@comany.net' },
     { userId: uuidv4(), userName: 'Jiro', email: 'jiro@comany.net' },
   ]
 
-  test('対象ユーザーを問い合わせる', async () => {
+  it('対象ユーザーを問い合わせる', async () => {
     // arrange
-    const querySpy = vi.spyOn(UserQueryRepository.prototype, 'query').mockResolvedValue(users)
+    const mockUserQueryService: IUserQueryService = {
+      query: vi.fn().mockResolvedValue(users),
+    }
+    const deps: QueryUsersDeps = {
+      userQueryService: mockUserQueryService,
+    }
 
     // act
-    const result = await queryUsers({ organizationId }, context)
+    const result = await queryUsers({ organizationId }, deps)
 
     // assert
     expect(result).toEqual(users)
-    expect(querySpy).toHaveBeenCalledWith(organizationId)
-  })
-
-  test.fails('PostgreSQL接続情報がないと初期化エラー', async () => {
-    // arrange
-    const withoutPostgresqlContext: FunctionContext = {
-      ...createFunctionContext(),
-      postgresql: undefined,
-    }
-    vi.stubEnv('DB_ENV', 'local')
-
-    // act
-    await queryUsers({ organizationId }, withoutPostgresqlContext)
+    expect(mockUserQueryService.query).toHaveBeenCalledWith(organizationId)
   })
 })

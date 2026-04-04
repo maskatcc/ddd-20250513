@@ -1,10 +1,29 @@
 import middy from '@middy/core'
+import httpErrorHandler from '@middy/http-error-handler'
 import { parser } from '@aws-lambda-powertools/parser/middleware'
+import { Logger } from '@aws-lambda-powertools/logger'
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware'
+import { Tracer } from '@aws-lambda-powertools/tracer'
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware'
+import { Metrics } from '@aws-lambda-powertools/metrics'
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware'
 import { Context as LambdaContext, APIGatewayProxyResult } from 'aws-lambda'
-import { createFunctionContext } from '../../runtime/functionContext.js'
+import { createFunctionRequestContext } from '../../runtime/functionRequestContext.js'
+import { PostgresqlGateway, PostgresqlConfig } from '../../runtime/postgresqlGateway.js'
 import { OrganizationId } from '../../domains/organization/organization.js'
-import { queryUsers } from '../../functions/userLogic/queryUsers.js'
+import { queryUsers, QueryUsersDeps } from '../../functions/userLogic/queryUsers.js'
+import { PostgresqlUserQueryRepository } from '../../infrastructures/postgresql/postgresqlUserQueryRepository.js'
 import { QueryUsersEvent, QueryUsersEventSchema } from './schema.js'
+import { zodParseErrorHandler } from '../commons/zodParseErrorHandler.js'
+import { httpValue } from '../commons/httpResponse.js'
+
+// モジュールスコープで初期化（warm invocationで再利用）
+const logger = new Logger()
+const tracer = new Tracer()
+const metrics = new Metrics()
+
+// モジュールスコープキャッシュ（warm invocationで再利用）
+let cachedGateway: PostgresqlGateway | undefined
 
 async function lambdaHandler(event: QueryUsersEvent, lambdaContext: LambdaContext): Promise<APIGatewayProxyResult> {
   const authorizer = event.requestContext.authorizer.lambda
@@ -12,14 +31,25 @@ async function lambdaHandler(event: QueryUsersEvent, lambdaContext: LambdaContex
     organizationId: new OrganizationId(authorizer.context.organizationId),
   }
 
-  const users = await queryUsers(input, createFunctionContext(lambdaContext))
-
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ users }),
+  if (!cachedGateway) {
+    const config = await PostgresqlConfig.fromEnvironment()
+    cachedGateway = new PostgresqlGateway(config)
   }
+
+  const context = createFunctionRequestContext(lambdaContext, logger, tracer, metrics)
+  const deps: QueryUsersDeps = {
+    userQueryService: new PostgresqlUserQueryRepository(cachedGateway, context),
+  }
+  const users = await queryUsers(input, deps)
+
+  return httpValue({ users })
 }
 
 export const handler = middy()
+  .use(httpErrorHandler({ logger: error => logger.error('Unhandled error', { error }) }))
+  .use(zodParseErrorHandler())
+  .use(injectLambdaContext(logger))
+  .use(captureLambdaHandler(tracer))
+  .use(logMetrics(metrics))
   .use(parser({ schema: QueryUsersEventSchema }))
   .handler(lambdaHandler)

@@ -5,18 +5,23 @@ import { handler } from './index.js'
 import { eventTemplate } from '../commons/testEventTemplate.js'
 import { v4 as uuidv4 } from 'uuid'
 import * as functions from '../../functions/userLogic/queryUsers.js'
-import { QueryUserRecord } from '../../infrastructures/postgresql/userQueryRepository.js'
+import { UserQueryResult } from '../../domains/user/repositories/index.js'
 import { QueryUsersEvent } from './schema.js'
+
+vi.mock('../../runtime/postgresqlGateway.js', () => ({
+  PostgresqlGateway: vi.fn(),
+  PostgresqlConfig: { fromEnvironment: vi.fn().mockResolvedValue({}) },
+}))
 
 describe('lambda/queryUsers', () => {
   const organizationId = new OrganizationId(uuidv4())
-  const users: QueryUserRecord[] = [
+  const users: UserQueryResult[] = [
     { userId: uuidv4(), userName: 'Taro', email: 'taro@campany.net' },
     { userId: uuidv4(), userName: 'Hanako', email: 'hanako@comany.net' },
     { userId: uuidv4(), userName: 'Jiro', email: 'jiro@comany.net' },
   ]
 
-  test('対象ユーザーを問い合わせる', async () => {
+  it('対象ユーザーを問い合わせる', async () => {
     const event: QueryUsersEvent = {
       ...eventTemplate,
       requestContext: {
