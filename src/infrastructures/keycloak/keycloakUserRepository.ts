@@ -1,17 +1,17 @@
 import { OrganizationId } from '../../domains/organization/organization.js'
+import { IFunctionRequestContext } from '../../domains/commons/IFunctionRequestContext.js'
 import { IUserRepository, IUserOrganizationRepository, IUserNotificationRepository } from '../../domains/user/repositories/index.js'
 import { Email, User, UserId, UserName } from '../../domains/user/user.js'
-import { FunctionContext, KeycloakLib } from '../../runtime/functionContext.js'
+import { KeycloakGateway } from '../../runtime/keycloakGateway.js'
 
 export class KeycloakUserRepository implements IUserRepository, IUserOrganizationRepository, IUserNotificationRepository {
-  readonly keycloak: KeycloakLib
-
-  constructor(private readonly context: FunctionContext) {
-    this.keycloak = context.keycloak
-  }
+  constructor(
+    private readonly gateway: KeycloakGateway,
+    private readonly context: IFunctionRequestContext,
+  ) {}
 
   async create(name: UserName, email: Email): Promise<UserId> {
-    const result = await this.keycloak.client.users.create({
+    const result = await this.gateway.client.users.create({
       username: name.value,
       email: email.value,
     })
