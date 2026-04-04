@@ -3,8 +3,8 @@ import { Email, User, UserId, UserName } from '../../domains/user/user.js'
 import { OrganizationId } from '../../domains/organization/organization.js'
 import { UserFindRepository } from '../../infrastructures/keycloak/userFindRepository.js'
 import { UserCreateRepository } from '../../infrastructures/keycloak/userCreateRepository.js'
-import { UserOrgsRepository } from '../../infrastructures/keycloak/userOrgsRepository.js'
-import { UserEmailRepository } from '../../infrastructures/keycloak/userEmailRepository.js'
+import { KeycloakUserOrganizationRepository } from '../../infrastructures/keycloak/keycloakUserOrganizationRepository.js'
+import { KeycloakUserNotificationRepository } from '../../infrastructures/keycloak/keycloakUserNotificationRepository.js'
 
 export async function createUser(args: { organizationId: OrganizationId, email: Email, userName: UserName }, context: FunctionContext): Promise<UserId> {
   let targetUser: User
@@ -27,10 +27,10 @@ export async function createUser(args: { organizationId: OrganizationId, email: 
   }
 
   // ユーザーを組織に所属させる（冪等にする）
-  await new UserOrgsRepository(context).joinOrganization(targetUser.id, args.organizationId)
+  await new KeycloakUserOrganizationRepository(context).joinOrganization(targetUser.id, args.organizationId)
 
   // 招待メールを送信する
-  const userEmailRepository = new UserEmailRepository(context)
+  const userEmailRepository = new KeycloakUserNotificationRepository(context)
 
   if (isNewAccount) {
     // アカウント設定リクエストを送信する

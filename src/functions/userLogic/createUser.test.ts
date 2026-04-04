@@ -1,9 +1,9 @@
 import { OrganizationId } from '../../domains/organization/organization.js'
 import { Email, User, UserId, UserName } from '../../domains/user/user.js'
 import { UserCreateRepository } from '../../infrastructures/keycloak/userCreateRepository.js'
-import { UserEmailRepository } from '../../infrastructures/keycloak/userEmailRepository.js'
+import { KeycloakUserNotificationRepository } from '../../infrastructures/keycloak/keycloakUserNotificationRepository.js'
+import { KeycloakUserOrganizationRepository } from '../../infrastructures/keycloak/keycloakUserOrganizationRepository.js'
 import { UserFindRepository } from '../../infrastructures/keycloak/userFindRepository.js'
-import { UserOrgsRepository } from '../../infrastructures/keycloak/userOrgsRepository.js'
 import { createFunctionContext } from '../../runtime/functionContext.js'
 import { createUser } from './createUser.js'
 import { v4 as uuidv4 } from 'uuid'
@@ -22,9 +22,9 @@ describe('createUser', () => {
     const findByEmailSpy = vi.spyOn(UserFindRepository.prototype, 'findByEmail').mockResolvedValue(undefined)
     const createSpy = vi.spyOn(UserCreateRepository.prototype, 'create').mockResolvedValue(userId)
     const findByIdSpy = vi.spyOn(UserFindRepository.prototype, 'findById').mockResolvedValue(createdUser)
-    const joinOrganizationSpy = vi.spyOn(UserOrgsRepository.prototype, 'joinOrganization').mockResolvedValue(undefined)
-    const inviteSpy = vi.spyOn(UserEmailRepository.prototype, 'invite').mockResolvedValue(undefined)
-    const verifyEmailSpy = vi.spyOn(UserEmailRepository.prototype, 'verifyEmail').mockResolvedValue(undefined)
+    const joinOrganizationSpy = vi.spyOn(KeycloakUserOrganizationRepository.prototype, 'joinOrganization').mockResolvedValue(undefined)
+    const inviteSpy = vi.spyOn(KeycloakUserNotificationRepository.prototype, 'invite').mockResolvedValue(undefined)
+    const verifyEmailSpy = vi.spyOn(KeycloakUserNotificationRepository.prototype, 'verifyEmail').mockResolvedValue(undefined)
 
     // act
     const result = await createUser({ organizationId, email, userName }, context)
@@ -44,8 +44,8 @@ describe('createUser', () => {
 
     // arrange
     const findByEmailSpy = vi.spyOn(UserFindRepository.prototype, 'findByEmail').mockResolvedValue(savedUser)
-    const joinOrganizationSpy = vi.spyOn(UserOrgsRepository.prototype, 'joinOrganization').mockResolvedValue(undefined)
-    const verifyEmailSpy = vi.spyOn(UserEmailRepository.prototype, 'verifyEmail').mockResolvedValue(undefined)
+    const joinOrganizationSpy = vi.spyOn(KeycloakUserOrganizationRepository.prototype, 'joinOrganization').mockResolvedValue(undefined)
+    const verifyEmailSpy = vi.spyOn(KeycloakUserNotificationRepository.prototype, 'verifyEmail').mockResolvedValue(undefined)
 
     // act
     const result = await createUser({ organizationId, email, userName }, context)

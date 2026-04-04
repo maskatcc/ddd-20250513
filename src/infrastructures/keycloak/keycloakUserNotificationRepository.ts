@@ -1,8 +1,9 @@
 import { OrganizationId } from '../../domains/organization/organization.js'
+import { IUserNotificationRepository } from '../../domains/user/repositories/IUserNotificationRepository.js'
 import { UserId } from '../../domains/user/user.js'
 import { FunctionContext, KeycloakLib } from '../../runtime/functionContext.js'
 
-export class UserEmailRepository {
+export class KeycloakUserNotificationRepository implements IUserNotificationRepository {
   readonly keycloak: KeycloakLib
 
   constructor(private readonly context: FunctionContext) {

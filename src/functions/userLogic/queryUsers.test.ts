@@ -1,5 +1,5 @@
 import { OrganizationId } from '../../domains/organization/organization.js'
-import { QueryUserRecord, UserQueryRepository } from '../../infrastructures/postgresql/userQueryRepository.js'
+import { QueryUserRecord, PostgresqlUserQueryRepository } from '../../infrastructures/postgresql/postgresqlUserQueryRepository.js'
 import { createFunctionContext, FunctionContext, PostgresqlLib } from '../../runtime/functionContext.js'
 import { v4 as uuidv4 } from 'uuid'
 import { queryUsers } from './queryUsers.js'
@@ -18,7 +18,7 @@ describe('queryUsers', () => {
 
   test('対象ユーザーを問い合わせる', async () => {
     // arrange
-    const querySpy = vi.spyOn(UserQueryRepository.prototype, 'query').mockResolvedValue(users)
+    const querySpy = vi.spyOn(PostgresqlUserQueryRepository.prototype, 'query').mockResolvedValue(users)
 
     // act
     const result = await queryUsers({ organizationId }, context)

@@ -1,13 +1,11 @@
 import { OrganizationId } from '../../domains/organization/organization.js'
+import { IUserQueryService, type UserQueryResult } from '../../domains/user/repositories/IUserQueryService.js'
 import { FunctionContext, PostgresqlLib } from '../../runtime/functionContext.js'
 
-export type QueryUserRecord = {
-  userId: string
-  userName: string
-  email: string
-}
+/** @deprecated ドメイン層の UserQueryResult を使用してください */
+export type QueryUserRecord = UserQueryResult
 
-export class UserQueryRepository {
+export class PostgresqlUserQueryRepository implements IUserQueryService {
   readonly postgresql: PostgresqlLib
 
   constructor(private readonly context: FunctionContext) {
@@ -17,7 +15,7 @@ export class UserQueryRepository {
     this.postgresql = context.postgresql!
   }
 
-  async query(_orgId: OrganizationId): Promise<QueryUserRecord[]> {
+  async query(_orgId: OrganizationId): Promise<UserQueryResult[]> {
     throw new Error('Method not implemented.')
   }
 }

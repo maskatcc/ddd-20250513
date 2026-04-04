@@ -1,8 +1,9 @@
 import { OrganizationId } from '../../domains/organization/organization.js'
+import { IUserOrganizationRepository } from '../../domains/user/repositories/IUserOrganizationRepository.js'
 import { UserId } from '../../domains/user/user.js'
 import { FunctionContext, KeycloakLib } from '../../runtime/functionContext.js'
 
-export class UserOrgsRepository {
+export class KeycloakUserOrganizationRepository implements IUserOrganizationRepository {
   readonly keycloak: KeycloakLib
 
   constructor(private readonly context: FunctionContext) {

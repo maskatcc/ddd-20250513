@@ -1,7 +1,7 @@
 import { OrganizationId } from '../../domains/organization/organization.js'
-import { QueryUserRecord, UserQueryRepository } from '../../infrastructures/postgresql/userQueryRepository.js'
+import { QueryUserRecord, PostgresqlUserQueryRepository } from '../../infrastructures/postgresql/postgresqlUserQueryRepository.js'
 import { FunctionContext } from '../../runtime/functionContext.js'
 
 export async function queryUsers(args: { organizationId: OrganizationId }, context: FunctionContext): Promise<QueryUserRecord[]> {
-  return await new UserQueryRepository(context).query(args.organizationId)
+  return await new PostgresqlUserQueryRepository(context).query(args.organizationId)
 }
