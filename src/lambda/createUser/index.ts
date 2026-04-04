@@ -1,4 +1,5 @@
 import middy from '@middy/core'
+import httpErrorHandler from '@middy/http-error-handler'
 import { parser } from '@aws-lambda-powertools/parser/middleware'
 import { Logger } from '@aws-lambda-powertools/logger'
 import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware'
@@ -14,6 +15,8 @@ import { OrganizationId } from '../../domains/organization/organization.js'
 import { Email, UserName } from '../../domains/user/user.js'
 import { KeycloakUserRepository } from '../../infrastructures/keycloak/keycloakUserRepository.js'
 import { CreateUserEvent, CreateUserEventSchema } from './schema.js'
+import { zodParseErrorHandler } from '../commons/zodParseErrorHandler.js'
+import { httpValue } from '../commons/httpResponse.js'
 
 // モジュールスコープで初期化（warm invocationで再利用）
 const logger = new Logger()
@@ -45,13 +48,12 @@ async function lambdaHandler(event: CreateUserEvent, lambdaContext: LambdaContex
   }
   const userId = await createUser(input, deps)
 
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ userId: userId.value }),
-  }
+  return httpValue({ userId: userId.value })
 }
 
 export const handler = middy()
+  .use(httpErrorHandler({ logger: error => logger.error('Unhandled error', { error }) }))
+  .use(zodParseErrorHandler())
   .use(injectLambdaContext(logger))
   .use(captureLambdaHandler(tracer))
   .use(logMetrics(metrics))

@@ -1,4 +1,5 @@
 import middy from '@middy/core'
+import httpErrorHandler from '@middy/http-error-handler'
 import { parser } from '@aws-lambda-powertools/parser/middleware'
 import { Logger } from '@aws-lambda-powertools/logger'
 import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware'
@@ -13,6 +14,8 @@ import { OrganizationId } from '../../domains/organization/organization.js'
 import { queryUsers, QueryUsersDeps } from '../../functions/userLogic/queryUsers.js'
 import { PostgresqlUserQueryRepository } from '../../infrastructures/postgresql/postgresqlUserQueryRepository.js'
 import { QueryUsersEvent, QueryUsersEventSchema } from './schema.js'
+import { zodParseErrorHandler } from '../commons/zodParseErrorHandler.js'
+import { httpValue } from '../commons/httpResponse.js'
 
 // モジュールスコープで初期化（warm invocationで再利用）
 const logger = new Logger()
@@ -39,13 +42,12 @@ async function lambdaHandler(event: QueryUsersEvent, lambdaContext: LambdaContex
   }
   const users = await queryUsers(input, deps)
 
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ users }),
-  }
+  return httpValue({ users })
 }
 
 export const handler = middy()
+  .use(httpErrorHandler({ logger: error => logger.error('Unhandled error', { error }) }))
+  .use(zodParseErrorHandler())
   .use(injectLambdaContext(logger))
   .use(captureLambdaHandler(tracer))
   .use(logMetrics(metrics))
