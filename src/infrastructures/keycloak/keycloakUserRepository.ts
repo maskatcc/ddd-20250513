@@ -1,8 +1,9 @@
-import { IUserRepository } from '../../domains/user/repositories/IUserRepository.js'
+import { OrganizationId } from '../../domains/organization/organization.js'
+import { IUserRepository, IUserOrganizationRepository, IUserNotificationRepository } from '../../domains/user/repositories/index.js'
 import { Email, User, UserId, UserName } from '../../domains/user/user.js'
 import { FunctionContext, KeycloakLib } from '../../runtime/functionContext.js'
 
-export class KeycloakUserRepository implements IUserRepository {
+export class KeycloakUserRepository implements IUserRepository, IUserOrganizationRepository, IUserNotificationRepository {
   readonly keycloak: KeycloakLib
 
   constructor(private readonly context: FunctionContext) {
@@ -23,6 +24,18 @@ export class KeycloakUserRepository implements IUserRepository {
   }
 
   async findById(_id: UserId): Promise<User | undefined> {
+    throw new Error('Method not implemented.')
+  }
+
+  async joinOrganization(_id: UserId, _orgId: OrganizationId): Promise<void> {
+    throw new Error('Method not implemented.')
+  }
+
+  async invite(_id: UserId, _orgId: OrganizationId): Promise<void> {
+    throw new Error('Method not implemented.')
+  }
+
+  async verifyEmail(_id: UserId): Promise<void> {
     throw new Error('Method not implemented.')
   }
 }

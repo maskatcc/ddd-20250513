@@ -6,8 +6,6 @@ import { createUser, CreateUserDeps } from '../../functions/userLogic/createUser
 import { OrganizationId } from '../../domains/organization/organization.js'
 import { Email, UserName } from '../../domains/user/user.js'
 import { KeycloakUserRepository } from '../../infrastructures/keycloak/keycloakUserRepository.js'
-import { KeycloakUserOrganizationRepository } from '../../infrastructures/keycloak/keycloakUserOrganizationRepository.js'
-import { KeycloakUserNotificationRepository } from '../../infrastructures/keycloak/keycloakUserNotificationRepository.js'
 import { CreateUserEvent, CreateUserEventSchema } from './schema.js'
 
 async function lambdaHandler(event: CreateUserEvent, lambdaContext: LambdaContext): Promise<APIGatewayProxyResult> {
@@ -19,10 +17,11 @@ async function lambdaHandler(event: CreateUserEvent, lambdaContext: LambdaContex
   }
 
   const context = createFunctionContext(lambdaContext)
+  const keycloakUserRepository = new KeycloakUserRepository(context)
   const deps: CreateUserDeps = {
-    userRepository: new KeycloakUserRepository(context),
-    userOrganizationRepository: new KeycloakUserOrganizationRepository(context),
-    userNotificationRepository: new KeycloakUserNotificationRepository(context),
+    userRepository: keycloakUserRepository,
+    userOrganizationRepository: keycloakUserRepository,
+    userNotificationRepository: keycloakUserRepository,
   }
   const userId = await createUser(input, deps)
 
