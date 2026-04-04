@@ -2,9 +2,12 @@ import middy from '@middy/core'
 import { parser } from '@aws-lambda-powertools/parser/middleware'
 import { Context as LambdaContext, APIGatewayProxyResult } from 'aws-lambda'
 import { createFunctionContext } from '../../runtime/functionContext.js'
-import { createUser } from '../../functions/userLogic/createUser.js'
+import { createUser, CreateUserDeps } from '../../functions/userLogic/createUser.js'
 import { OrganizationId } from '../../domains/organization/organization.js'
 import { Email, UserName } from '../../domains/user/user.js'
+import { KeycloakUserRepository } from '../../infrastructures/keycloak/keycloakUserRepository.js'
+import { KeycloakUserOrganizationRepository } from '../../infrastructures/keycloak/keycloakUserOrganizationRepository.js'
+import { KeycloakUserNotificationRepository } from '../../infrastructures/keycloak/keycloakUserNotificationRepository.js'
 import { CreateUserEvent, CreateUserEventSchema } from './schema.js'
 
 async function lambdaHandler(event: CreateUserEvent, lambdaContext: LambdaContext): Promise<APIGatewayProxyResult> {
@@ -15,7 +18,13 @@ async function lambdaHandler(event: CreateUserEvent, lambdaContext: LambdaContex
     userName: new UserName(event.body.userName),
   }
 
-  const userId = await createUser(input, createFunctionContext(lambdaContext))
+  const context = createFunctionContext(lambdaContext)
+  const deps: CreateUserDeps = {
+    userRepository: new KeycloakUserRepository(context),
+    userOrganizationRepository: new KeycloakUserOrganizationRepository(context),
+    userNotificationRepository: new KeycloakUserNotificationRepository(context),
+  }
+  const userId = await createUser(input, deps)
 
   return {
     statusCode: 200,
