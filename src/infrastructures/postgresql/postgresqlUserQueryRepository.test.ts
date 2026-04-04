@@ -11,7 +11,7 @@ describe('PostgresqlUserQueryRepository', () => {
     metrics: { addMetric: vi.fn(), addDimension: vi.fn() },
   }
 
-  test.fails('queryはまだ実装されていない', async () => {
+  it.fails('queryはまだ実装されていない', async () => {
     const config = new PostgresqlConfig('localhost', 5432, 'testdb', 'user', 'pass')
     const gateway = new PostgresqlGateway(config)
     const repository = new PostgresqlUserQueryRepository(gateway, mockContext)

@@ -21,7 +21,7 @@ describe('lambda/queryUsers', () => {
     { userId: uuidv4(), userName: 'Jiro', email: 'jiro@comany.net' },
   ]
 
-  test('対象ユーザーを問い合わせる', async () => {
+  it('対象ユーザーを問い合わせる', async () => {
     const event: QueryUsersEvent = {
       ...eventTemplate,
       requestContext: {

@@ -19,7 +19,7 @@ describe('lambda/createUser', () => {
   const userName = new UserName('Taro')
   const userId = new UserId(uuidv4())
 
-  test('ユーザーを作成する', async () => {
+  it('ユーザーを作成する', async () => {
     const event: CreateUserEvent = {
       ...eventTemplate,
       requestContext: {

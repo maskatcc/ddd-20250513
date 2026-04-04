@@ -10,7 +10,7 @@ describe('createUser', () => {
   const userName = new UserName('Taro')
   const userId = new UserId(uuidv4())
 
-  test('ユーザーを作成してアカウント設定リクエストを送信する', async () => {
+  it('ユーザーを作成してアカウント設定リクエストを送信する', async () => {
     const createdUser = new User(userId, userName, email)
 
     // arrange
@@ -45,7 +45,7 @@ describe('createUser', () => {
     expect(mockUserNotificationRepository.verifyEmail).not.toHaveBeenCalled()
   })
 
-  test('ユーザーを作成してメールアドレス確認リクエストを送信する', async () => {
+  it('ユーザーを作成してメールアドレス確認リクエストを送信する', async () => {
     const savedUser = new User(userId, userName, email)
 
     // arrange
@@ -77,7 +77,7 @@ describe('createUser', () => {
     expect(mockUserNotificationRepository.verifyEmail).toHaveBeenCalledWith(userId)
   })
 
-  test.fails('作成したユーザーが取得できない想定外エラー', async () => {
+  it.fails('作成したユーザーが取得できない想定外エラー', async () => {
     // arrange
     const mockUserRepository: IUserRepository = {
       findByEmail: vi.fn().mockResolvedValue(undefined),

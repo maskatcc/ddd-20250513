@@ -11,7 +11,7 @@ describe('queryUsers', () => {
     { userId: uuidv4(), userName: 'Jiro', email: 'jiro@comany.net' },
   ]
 
-  test('対象ユーザーを問い合わせる', async () => {
+  it('対象ユーザーを問い合わせる', async () => {
     // arrange
     const mockUserQueryService: IUserQueryService = {
       query: vi.fn().mockResolvedValue(users),
