@@ -8,8 +8,9 @@ import * as functions from '../../functions/userLogic/queryUsers.js'
 import { UserQueryResult } from '../../domains/user/repositories/index.js'
 import { QueryUsersEvent } from './schema.js'
 
-vi.mock('../../infrastructures/postgresql/postgresqlUserQueryRepository.js', () => ({
-  PostgresqlUserQueryRepository: vi.fn(),
+vi.mock('../../runtime/postgresqlGateway.js', () => ({
+  PostgresqlGateway: vi.fn(),
+  PostgresqlConfig: { fromEnvironment: vi.fn().mockResolvedValue({}) },
 }))
 
 describe('lambda/queryUsers', () => {
