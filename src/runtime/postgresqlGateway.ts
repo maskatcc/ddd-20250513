@@ -1,6 +1,5 @@
 import { Pool as PostgresPool } from 'pg'
 import { PostgresqlConfig } from './postgresqlConfig.js'
-export { PostgresqlConfig } from './postgresqlConfig.js'
 
 export class PostgresqlGateway {
   readonly client: PostgresPool
@@ -15,3 +14,5 @@ export class PostgresqlGateway {
     })
   }
 }
+
+export { PostgresqlConfig }

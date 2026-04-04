@@ -1,6 +1,5 @@
 import KcAdminClient from '@keycloak/keycloak-admin-client'
 import { KeycloakConfig } from './keycloakConfig.js'
-export { KeycloakConfig } from './keycloakConfig.js'
 
 export class KeycloakGateway {
   readonly client: KcAdminClient
@@ -19,3 +18,5 @@ export class KeycloakGateway {
     })
   }
 }
+
+export { KeycloakConfig }
