@@ -1,5 +1,11 @@
 import middy from '@middy/core'
 import { parser } from '@aws-lambda-powertools/parser/middleware'
+import { Logger } from '@aws-lambda-powertools/logger'
+import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware'
+import { Tracer } from '@aws-lambda-powertools/tracer'
+import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware'
+import { Metrics } from '@aws-lambda-powertools/metrics'
+import { logMetrics } from '@aws-lambda-powertools/metrics/middleware'
 import { Context as LambdaContext, APIGatewayProxyResult } from 'aws-lambda'
 import { createFunctionRequestContext } from '../../runtime/functionRequestContext.js'
 import { KeycloakGateway, KeycloakConfig } from '../../runtime/keycloakGateway.js'
@@ -7,13 +13,12 @@ import { createUser, CreateUserDeps } from '../../functions/userLogic/createUser
 import { OrganizationId } from '../../domains/organization/organization.js'
 import { Email, UserName } from '../../domains/user/user.js'
 import { KeycloakUserRepository } from '../../infrastructures/keycloak/keycloakUserRepository.js'
-import { ILogger, ITracer, IMetrics } from '../../domains/commons/IFunctionRequestContext.js'
 import { CreateUserEvent, CreateUserEventSchema } from './schema.js'
 
-// TODO: PowerTools Logger/Tracer/Metrics に置き換える
-const logger: ILogger = { info: () => {}, warn: () => {}, error: () => {} }
-const tracer: ITracer = { getSegment: () => undefined, setSegment: () => {}, addAnnotation: () => {}, addMetadata: () => {} }
-const metrics: IMetrics = { addMetric: () => {}, addDimension: () => {} }
+// モジュールスコープで初期化（warm invocationで再利用）
+const logger = new Logger()
+const tracer = new Tracer()
+const metrics = new Metrics()
 
 // モジュールスコープキャッシュ（warm invocationで再利用）
 let cachedGateway: KeycloakGateway | undefined
@@ -47,5 +52,8 @@ async function lambdaHandler(event: CreateUserEvent, lambdaContext: LambdaContex
 }
 
 export const handler = middy()
+  .use(injectLambdaContext(logger))
+  .use(captureLambdaHandler(tracer))
+  .use(logMetrics(metrics))
   .use(parser({ schema: CreateUserEventSchema }))
   .handler(lambdaHandler)

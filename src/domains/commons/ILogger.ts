@@ -1,6 +1,6 @@
 /** ログ出力のインターフェース */
 export interface ILogger {
-  info(message: string, extra?: Record<string, unknown>): void
-  warn(message: string, extra?: Record<string, unknown>): void
-  error(message: string, extra?: Record<string, unknown>): void
+  info(message: string, ...extra: unknown[]): void
+  warn(message: string, ...extra: unknown[]): void
+  error(message: string, ...extra: unknown[]): void
 }
