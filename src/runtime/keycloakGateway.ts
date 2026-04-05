@@ -17,6 +17,10 @@ export class KeycloakGateway {
       realmName: config.realm,
     })
   }
+
+  async refresh(): Promise<void> {
+    // 将来: トークンの有効期限チェック・リフレッシュをここに追加
+  }
 }
 
 export { KeycloakConfig }

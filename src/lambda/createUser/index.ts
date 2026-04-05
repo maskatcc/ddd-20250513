@@ -1,6 +1,7 @@
 import { parser } from '@aws-lambda-powertools/parser/middleware'
 import { Context as LambdaContext, APIGatewayProxyResult } from 'aws-lambda'
 import { commonMiddleware } from '../../middleware/commonMiddleware.js'
+import { refreshGateway } from '../../middleware/refreshGateway.js'
 import { FunctionModuleContext } from '../../runtime/functionModuleContext.js'
 import { createRequestContext } from '../../runtime/functionRequestContext.js'
 import { KeycloakGateway, KeycloakConfig } from '../../runtime/keycloakGateway.js'
@@ -13,12 +14,10 @@ import { httpValue } from '../commons/httpResponse.js'
 
 // モジュールスコープで初期化（warm invocationで再利用）
 const moduleContext = await FunctionModuleContext.create()
-
-// モジュールスコープキャッシュ（warm invocationで再利用）
-let cachedGateway: KeycloakGateway | undefined
+const keycloakGateway = new KeycloakGateway(await KeycloakConfig.fromEnvironment())
 
 const depsFactory: CreateUserDepsFactory = (context) => {
-  const repo = new KeycloakUserRepository(cachedGateway!, context)
+  const repo = new KeycloakUserRepository(keycloakGateway, context)
   return {
     userRepository: repo,
     userOrganizationRepository: repo,
@@ -27,10 +26,6 @@ const depsFactory: CreateUserDepsFactory = (context) => {
 }
 
 async function lambdaHandler(event: CreateUserEvent, lambdaContext: LambdaContext): Promise<APIGatewayProxyResult> {
-  if (!cachedGateway) {
-    cachedGateway = new KeycloakGateway(await KeycloakConfig.fromEnvironment())
-  }
-
   const context = createRequestContext(moduleContext, lambdaContext)
   const authorizer = event.requestContext.authorizer.lambda
   const input = {
@@ -44,5 +39,6 @@ async function lambdaHandler(event: CreateUserEvent, lambdaContext: LambdaContex
 }
 
 export const handler = commonMiddleware<CreateUserEvent>(moduleContext)
+  .use(refreshGateway(keycloakGateway))
   .use(parser({ schema: CreateUserEventSchema }))
   .handler(lambdaHandler)
