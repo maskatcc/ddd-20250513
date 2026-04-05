@@ -6,9 +6,14 @@ import { v4 as uuidv4 } from 'uuid'
 
 describe('PostgresqlUserQueryRepository', () => {
   const mockContext: IFunctionRequestContext = {
-    logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
-    tracer: { getSegment: () => undefined, setSegment: vi.fn(), putAnnotation: vi.fn(), putMetadata: vi.fn() },
-    metrics: { addMetric: vi.fn(), addDimension: vi.fn() },
+    raw: {
+      logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      tracer: { getSegment: () => undefined, setSegment: vi.fn(), putAnnotation: vi.fn(), putMetadata: vi.fn() },
+      metrics: { addMetric: vi.fn(), addDimension: vi.fn() },
+    },
+    logInfo: vi.fn(),
+    logWarn: vi.fn(),
+    logError: vi.fn(),
   }
 
   it.fails('queryはまだ実装されていない', async () => {

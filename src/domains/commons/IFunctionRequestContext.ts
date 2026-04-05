@@ -1,12 +1,14 @@
-import { ILogger } from './ILogger.js'
-import { ITracer } from './ITracer.js'
-import { IMetrics } from './IMetrics.js'
+import { IFunctionModuleContext } from './IFunctionModuleContext.js'
 
-/** リクエストスコープのオブザーバビリティインターフェース */
+/** リクエストスコープのオブザーバビリティインターフェース（毎リクエスト生成） */
 export interface IFunctionRequestContext {
-  logger: ILogger
-  tracer: ITracer
-  metrics: IMetrics
+  /** モジュールスコープの生ツールへのアクセス */
+  raw: IFunctionModuleContext
+
+  /** 構造化ログ — requestId/functionName を自動付与 */
+  logInfo(message: string, extra?: Record<string, unknown>): void
+  logWarn(message: string, extra?: Record<string, unknown>): void
+  logError(message: string, error?: Error, extra?: Record<string, unknown>): void
 }
 
-export type { ILogger, ITracer, IMetrics }
+export type { IFunctionModuleContext }

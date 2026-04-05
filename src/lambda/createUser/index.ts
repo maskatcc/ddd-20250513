@@ -1,14 +1,12 @@
 import middy from '@middy/core'
 import httpErrorHandler from '@middy/http-error-handler'
 import { parser } from '@aws-lambda-powertools/parser/middleware'
-import { Logger } from '@aws-lambda-powertools/logger'
 import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware'
-import { Tracer } from '@aws-lambda-powertools/tracer'
 import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware'
-import { Metrics } from '@aws-lambda-powertools/metrics'
 import { logMetrics } from '@aws-lambda-powertools/metrics/middleware'
 import { Context as LambdaContext, APIGatewayProxyResult } from 'aws-lambda'
-import { createFunctionRequestContext } from '../../runtime/functionRequestContext.js'
+import { FunctionModuleContext } from '../../runtime/functionModuleContext.js'
+import { createRequestContext } from '../../runtime/functionRequestContext.js'
 import { KeycloakGateway, KeycloakConfig } from '../../runtime/keycloakGateway.js'
 import { createUser, CreateUserDeps } from '../../functions/userLogic/createUser.js'
 import { OrganizationId } from '../../domains/organization/organization.js'
@@ -19,9 +17,8 @@ import { zodParseErrorHandler } from '../commons/zodParseErrorHandler.js'
 import { httpValue } from '../commons/httpResponse.js'
 
 // モジュールスコープで初期化（warm invocationで再利用）
-const logger = new Logger()
-const tracer = new Tracer()
-const metrics = new Metrics()
+const moduleContext = await FunctionModuleContext.create()
+const { logger, tracer, metrics } = moduleContext
 
 // モジュールスコープキャッシュ（warm invocationで再利用）
 let cachedGateway: KeycloakGateway | undefined
@@ -39,7 +36,7 @@ async function lambdaHandler(event: CreateUserEvent, lambdaContext: LambdaContex
     cachedGateway = new KeycloakGateway(config)
   }
 
-  const context = createFunctionRequestContext(lambdaContext, logger, tracer, metrics)
+  const context = createRequestContext(moduleContext, lambdaContext)
   const keycloakUserRepository = new KeycloakUserRepository(cachedGateway, context)
   const deps: CreateUserDeps = {
     userRepository: keycloakUserRepository,
