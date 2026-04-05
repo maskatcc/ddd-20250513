@@ -37,7 +37,7 @@ describe('lambda/createUser', () => {
     }
 
     // arrange
-    const createUserSpy = vi.spyOn(functions, 'createUser').mockResolvedValue(userId)
+    const createUserSpy = vi.spyOn(functions, 'createUser').mockReturnValue(async () => userId)
 
     // act
     const result: APIGatewayProxyResult = await handler(event, mockContext())

@@ -1,5 +1,6 @@
 import { OrganizationId } from '../../domains/organization/organization.js'
 import { IUserQueryService, UserQueryResult } from '../../domains/user/repositories/index.js'
+import { mockRequestContext } from '../../runtime/mockFunctionRequestContext.js'
 import { v4 as uuidv4 } from 'uuid'
 import { queryUsers, QueryUsersDeps } from './queryUsers.js'
 
@@ -21,7 +22,7 @@ describe('queryUsers', () => {
     }
 
     // act
-    const result = await queryUsers({ organizationId }, deps)
+    const result = await queryUsers(() => deps)(mockRequestContext, { organizationId })
 
     // assert
     expect(result).toEqual(users)

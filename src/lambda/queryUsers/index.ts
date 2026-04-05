@@ -9,7 +9,7 @@ import { FunctionModuleContext } from '../../runtime/functionModuleContext.js'
 import { createRequestContext } from '../../runtime/functionRequestContext.js'
 import { PostgresqlGateway, PostgresqlConfig } from '../../runtime/postgresqlGateway.js'
 import { OrganizationId } from '../../domains/organization/organization.js'
-import { queryUsers, QueryUsersDeps } from '../../functions/userLogic/queryUsers.js'
+import { queryUsers, QueryUsersDepsFactory } from '../../functions/userLogic/queryUsers.js'
 import { PostgresqlUserQueryRepository } from '../../infrastructures/postgresql/postgresqlUserQueryRepository.js'
 import { QueryUsersEvent, QueryUsersEventSchema } from './schema.js'
 import { zodParseErrorHandler } from '../commons/zodParseErrorHandler.js'
@@ -22,22 +22,21 @@ const { logger, tracer, metrics } = moduleContext
 // モジュールスコープキャッシュ（warm invocationで再利用）
 let cachedGateway: PostgresqlGateway | undefined
 
+const depsFactory: QueryUsersDepsFactory = (context) => ({
+  userQueryService: new PostgresqlUserQueryRepository(cachedGateway!, context),
+})
+
 async function lambdaHandler(event: QueryUsersEvent, lambdaContext: LambdaContext): Promise<APIGatewayProxyResult> {
+  if (!cachedGateway) {
+    cachedGateway = new PostgresqlGateway(await PostgresqlConfig.fromEnvironment())
+  }
+
+  const context = createRequestContext(moduleContext, lambdaContext)
   const authorizer = event.requestContext.authorizer.lambda
   const input = {
     organizationId: new OrganizationId(authorizer.context.organizationId),
   }
-
-  if (!cachedGateway) {
-    const config = await PostgresqlConfig.fromEnvironment()
-    cachedGateway = new PostgresqlGateway(config)
-  }
-
-  const context = createRequestContext(moduleContext, lambdaContext)
-  const deps: QueryUsersDeps = {
-    userQueryService: new PostgresqlUserQueryRepository(cachedGateway, context),
-  }
-  const users = await queryUsers(input, deps)
+  const users = await queryUsers(depsFactory)(context, input)
 
   return httpValue({ users })
 }

@@ -38,7 +38,7 @@ describe('lambda/queryUsers', () => {
     }
 
     // arrange
-    const queryUsersSpy = vi.spyOn(functions, 'queryUsers').mockResolvedValue(users)
+    const queryUsersSpy = vi.spyOn(functions, 'queryUsers').mockReturnValue(async () => users)
 
     // act
     const result: APIGatewayProxyResult = await handler(event, mockContext())

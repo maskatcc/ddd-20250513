@@ -2,6 +2,7 @@ import { OrganizationId } from '../../domains/organization/organization.js'
 import { Email, User, UserId, UserName } from '../../domains/user/user.js'
 import { IUserRepository, IUserOrganizationRepository, IUserNotificationRepository } from '../../domains/user/repositories/index.js'
 import { createUser, CreateUserDeps } from './createUser.js'
+import { mockRequestContext } from '../../runtime/mockFunctionRequestContext.js'
 import { v4 as uuidv4 } from 'uuid'
 
 describe('createUser', () => {
@@ -33,7 +34,7 @@ describe('createUser', () => {
     }
 
     // act
-    const result = await createUser({ organizationId, email, userName }, deps)
+    const result = await createUser(() => deps)(mockRequestContext, { organizationId, email, userName })
 
     // assert
     expect(result).toEqual(userId)
@@ -68,7 +69,7 @@ describe('createUser', () => {
     }
 
     // act
-    const result = await createUser({ organizationId, email, userName }, deps)
+    const result = await createUser(() => deps)(mockRequestContext, { organizationId, email, userName })
 
     // assert
     expect(result).toEqual(userId)
@@ -91,6 +92,6 @@ describe('createUser', () => {
     }
 
     // act
-    await createUser({ organizationId, email, userName }, deps)
+    await createUser(() => deps)(mockRequestContext, { organizationId, email, userName })
   })
 })
