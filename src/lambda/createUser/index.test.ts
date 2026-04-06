@@ -9,7 +9,7 @@ import * as functions from '../../functions/userLogic/createUser.js'
 import { CreateUserEvent } from './schema.js'
 
 vi.mock('../../runtime/keycloakGateway.js', () => ({
-  KeycloakGateway: vi.fn(),
+  KeycloakGateway: vi.fn().mockImplementation(() => ({ refresh: vi.fn() })),
   KeycloakConfig: { fromEnvironment: vi.fn().mockResolvedValue({}) },
 }))
 
@@ -37,7 +37,7 @@ describe('lambda/createUser', () => {
     }
 
     // arrange
-    const createUserSpy = vi.spyOn(functions, 'createUser').mockResolvedValue(userId)
+    const createUserSpy = vi.spyOn(functions, 'createUser').mockReturnValue(async () => userId)
 
     // act
     const result: APIGatewayProxyResult = await handler(event, mockContext())

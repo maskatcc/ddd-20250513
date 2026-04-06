@@ -1,25 +1,34 @@
 import { Context as LambdaContext } from 'aws-lambda'
-import { IFunctionRequestContext, ILogger, ITracer, IMetrics } from '../domains/commons/IFunctionRequestContext.js'
+import { IFunctionRequestContext } from '../domains/commons/IFunctionRequestContext.js'
+import { FunctionModuleContext } from './functionModuleContext.js'
 
-type FunctionRequestContext = IFunctionRequestContext & {
-  lambdaContext: LambdaContext
-}
+export class FunctionRequestContext implements IFunctionRequestContext {
+  constructor(
+    readonly raw: FunctionModuleContext,
+    private readonly requestId: string,
+    private readonly functionName: string,
+  ) {}
 
-function createFunctionRequestContext(
-  lambdaContext: LambdaContext,
-  logger: ILogger,
-  tracer: ITracer,
-  metrics: IMetrics,
-): FunctionRequestContext {
-  return {
-    lambdaContext,
-    logger,
-    tracer,
-    metrics,
+  logInfo(message: string, extra?: Record<string, unknown>): void {
+    this.raw.logger.info(message, { requestId: this.requestId, functionName: this.functionName, ...extra })
+  }
+
+  logWarn(message: string, extra?: Record<string, unknown>): void {
+    this.raw.logger.warn(message, { requestId: this.requestId, functionName: this.functionName, ...extra })
+  }
+
+  logError(message: string, error?: Error, extra?: Record<string, unknown>): void {
+    this.raw.logger.error(message, { requestId: this.requestId, functionName: this.functionName, error, ...extra })
   }
 }
 
-export {
-  type FunctionRequestContext,
-  createFunctionRequestContext,
+export function createRequestContext(
+  moduleContext: FunctionModuleContext,
+  lambdaContext: LambdaContext,
+): FunctionRequestContext {
+  return new FunctionRequestContext(
+    moduleContext,
+    lambdaContext.awsRequestId,
+    lambdaContext.functionName,
+  )
 }

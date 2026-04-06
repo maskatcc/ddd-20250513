@@ -9,7 +9,7 @@ import { UserQueryResult } from '../../domains/user/repositories/index.js'
 import { QueryUsersEvent } from './schema.js'
 
 vi.mock('../../runtime/postgresqlGateway.js', () => ({
-  PostgresqlGateway: vi.fn(),
+  PostgresqlGateway: vi.fn().mockImplementation(() => ({ refresh: vi.fn() })),
   PostgresqlConfig: { fromEnvironment: vi.fn().mockResolvedValue({}) },
 }))
 
@@ -38,7 +38,7 @@ describe('lambda/queryUsers', () => {
     }
 
     // arrange
-    const queryUsersSpy = vi.spyOn(functions, 'queryUsers').mockResolvedValue(users)
+    const queryUsersSpy = vi.spyOn(functions, 'queryUsers').mockReturnValue(async () => users)
 
     // act
     const result: APIGatewayProxyResult = await handler(event, mockContext())

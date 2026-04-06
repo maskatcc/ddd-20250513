@@ -13,6 +13,10 @@ export class PostgresqlGateway {
       password: config.password,
     })
   }
+
+  async refresh(): Promise<void> {
+    // 将来: 接続ヘルスチェック等をここに追加
+  }
 }
 
 export { PostgresqlConfig }
