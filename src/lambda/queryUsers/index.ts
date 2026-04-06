@@ -3,7 +3,7 @@ import { Context as LambdaContext, APIGatewayProxyResult } from 'aws-lambda'
 import { commonMiddleware } from '../../middleware/commonMiddleware.js'
 import { refreshGateway } from '../../middleware/refreshGateway.js'
 import { FunctionModuleContext } from '../../runtime/functionModuleContext.js'
-import { createRequestContext } from '../../runtime/functionRequestContext.js'
+import { requireRequestContext } from '../../runtime/functionRequestContext.js'
 import { PostgresqlGateway, PostgresqlConfig } from '../../runtime/postgresqlGateway.js'
 import { OrganizationId } from '../../domains/organization/organization.js'
 import { queryUsers, QueryUsersDepsFactory } from '../../functions/userLogic/queryUsers.js'
@@ -20,7 +20,7 @@ const depsFactory: QueryUsersDepsFactory = (context) => ({
 })
 
 async function lambdaHandler(event: QueryUsersEvent, lambdaContext: LambdaContext): Promise<APIGatewayProxyResult> {
-  const context = createRequestContext(moduleContext, lambdaContext)
+  const context = requireRequestContext(lambdaContext)
   const authorizer = event.requestContext.authorizer.lambda
   const input = {
     organizationId: new OrganizationId(authorizer.context.organizationId),

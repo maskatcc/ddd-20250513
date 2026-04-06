@@ -5,6 +5,9 @@ export interface IFunctionRequestContext {
   /** モジュールスコープの生ツールへのアクセス */
   raw: IFunctionModuleContext
 
+  /** リクエスト開始からの経過時間（ミリ秒） */
+  elapsedMs(): number
+
   /** 構造化ログ — requestId/functionName を自動付与 */
   logInfo(message: string, extra?: Record<string, unknown>): void
   logWarn(message: string, extra?: Record<string, unknown>): void
