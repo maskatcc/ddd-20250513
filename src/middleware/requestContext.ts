@@ -7,21 +7,37 @@ export const requestContextMiddleware = (
   moduleContext: FunctionModuleContext,
 ): MiddlewareObj<unknown, APIGatewayProxyResult> => ({
   before: async (request) => {
-    const ctx = createRequestContext(moduleContext, request.context)
+    const event = request.event as {
+      headers?: Record<string, string | undefined>
+      requestContext?: {
+        authorizer?: {
+          lambda?: { context?: { accessToken?: string; [k: string]: unknown } }
+        }
+      }
+    }
+    const lambdaAuth = event.requestContext?.authorizer?.lambda
+    if (!lambdaAuth) {
+      throw new Error('Lambda authorizer is not configured for this function')
+    }
+    const accessToken = lambdaAuth.context?.accessToken
+    if (!accessToken) {
+      throw new Error('accessToken is missing in authorizer context')
+    }
+
+    const ctx = createRequestContext(moduleContext, request.context, {
+      headers: event.headers ?? {},
+      authorizer: lambdaAuth,
+      accessToken,
+    })
     request.context.requestContext = ctx
-    ctx.logInfo('request.start')
+    ctx.logApp({ event: 'request.start' })
   },
   after: async (request) => {
     const ctx = request.context.requestContext
-    ctx?.logInfo('request.end', {
-      statusCode: request.response?.statusCode,
-      durationMs: ctx.elapsedMs(),
-    })
+    ctx?.logApp({ event: 'request.end', statusCode: request.response?.statusCode ?? 0 })
   },
   onError: async (request) => {
     const ctx = request.context.requestContext
-    ctx?.logError('request.error', request.error ?? undefined, {
-      durationMs: ctx.elapsedMs(),
-    })
+    ctx?.logApp({ event: 'request.error', error: request.error ?? undefined })
   },
 })

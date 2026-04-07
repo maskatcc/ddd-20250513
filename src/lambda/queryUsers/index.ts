@@ -21,9 +21,9 @@ const depsFactory: QueryUsersDepsFactory = (context) => ({
 
 async function lambdaHandler(event: QueryUsersEvent, lambdaContext: LambdaContext): Promise<APIGatewayProxyResult> {
   const context = requireRequestContext(lambdaContext)
-  const authorizer = event.requestContext.authorizer.lambda
+  const { context: authorizerContext } = context.getAuthorizer<{ context: { organizationId: string } }>()
   const input = {
-    organizationId: new OrganizationId(authorizer.context.organizationId),
+    organizationId: new OrganizationId(authorizerContext.organizationId),
   }
   const users = await queryUsers(depsFactory)(context, input)
 

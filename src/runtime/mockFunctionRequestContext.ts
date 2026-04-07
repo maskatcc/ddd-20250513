@@ -7,6 +7,8 @@ export const mockRequestContext: IFunctionRequestContext = {
     metrics: { addMetric: vi.fn(), addDimension: vi.fn() },
   },
   elapsedMs: vi.fn(() => 0),
+  accessToken: 'mock-access-token',
+  logApp: vi.fn(),
   logInfo: vi.fn(),
   logWarn: vi.fn(),
   logError: vi.fn(),

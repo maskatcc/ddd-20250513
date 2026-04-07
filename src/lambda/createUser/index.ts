@@ -27,9 +27,9 @@ const depsFactory: CreateUserDepsFactory = (context) => {
 
 async function lambdaHandler(event: CreateUserEvent, lambdaContext: LambdaContext): Promise<APIGatewayProxyResult> {
   const context = requireRequestContext(lambdaContext)
-  const authorizer = event.requestContext.authorizer.lambda
+  const { context: authorizerContext } = context.getAuthorizer<{ context: { organizationId: string } }>()
   const input = {
-    organizationId: new OrganizationId(authorizer.context.organizationId),
+    organizationId: new OrganizationId(authorizerContext.organizationId),
     email: new Email(event.body.email),
     userName: new UserName(event.body.userName),
   }

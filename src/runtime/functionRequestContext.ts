@@ -1,4 +1,5 @@
 import { Context as LambdaContext } from 'aws-lambda'
+import { AppLog } from '../domains/commons/appLog.js'
 import { IFunctionRequestContext } from '../domains/commons/IFunctionRequestContext.js'
 import { FunctionModuleContext } from './functionModuleContext.js'
 
@@ -11,6 +12,18 @@ declare module 'aws-lambda' {
   }
 }
 
+const MASKED_HEADER_KEYS = new Set(['authorization', 'referer'])
+
+function maskHeaders(
+  headers: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  const masked: Record<string, string | undefined> = {}
+  for (const [k, v] of Object.entries(headers)) {
+    masked[k] = MASKED_HEADER_KEYS.has(k.toLowerCase()) ? '***' : v
+  }
+  return masked
+}
+
 export class FunctionRequestContext implements IFunctionRequestContext {
   private readonly startedAt: number = Date.now()
 
@@ -18,10 +31,27 @@ export class FunctionRequestContext implements IFunctionRequestContext {
     readonly raw: FunctionModuleContext,
     private readonly requestId: string,
     private readonly functionName: string,
+    readonly headers: Record<string, string | undefined>,
+    private readonly authorizer: unknown,
+    readonly accessToken: string,
   ) {}
 
   elapsedMs(): number {
     return Date.now() - this.startedAt
+  }
+
+  getAuthorizer<T>(): T {
+    return this.authorizer as T
+  }
+
+  logApp(payload: AppLog): void {
+    this.raw.appLogger.info('appLog', {
+      functionName: this.functionName,
+      durationMs: this.elapsedMs(),
+      requestId: this.requestId,
+      headers: maskHeaders(this.headers),
+      ...payload,
+    })
   }
 
   logInfo(message: string, extra?: Record<string, unknown>): void {
@@ -37,14 +67,24 @@ export class FunctionRequestContext implements IFunctionRequestContext {
   }
 }
 
+export type CreateRequestContextOptions = {
+  headers: Record<string, string | undefined>
+  authorizer: unknown
+  accessToken: string
+}
+
 export function createRequestContext(
   moduleContext: FunctionModuleContext,
   lambdaContext: LambdaContext,
+  options: CreateRequestContextOptions,
 ): FunctionRequestContext {
   return new FunctionRequestContext(
     moduleContext,
     lambdaContext.awsRequestId,
     lambdaContext.functionName,
+    options.headers,
+    options.authorizer,
+    options.accessToken,
   )
 }
 
