@@ -31,6 +31,7 @@ describe('lambda/queryUsers', () => {
             principalId: 'accountId',
             context: {
               organizationId: organizationId.value,
+              accessToken: 'mock-access-token',
             },
           },
         },

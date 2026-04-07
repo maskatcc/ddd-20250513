@@ -3,7 +3,7 @@ import { Context as LambdaContext, APIGatewayProxyResult } from 'aws-lambda'
 import { commonMiddleware } from '../../middleware/commonMiddleware.js'
 import { refreshGateway } from '../../middleware/refreshGateway.js'
 import { FunctionModuleContext } from '../../runtime/functionModuleContext.js'
-import { createRequestContext } from '../../runtime/functionRequestContext.js'
+import { requireRequestContext } from '../../runtime/functionRequestContext.js'
 import { KeycloakGateway, KeycloakConfig } from '../../runtime/keycloakGateway.js'
 import { createUser, CreateUserDepsFactory } from '../../functions/userLogic/createUser.js'
 import { OrganizationId } from '../../domains/organization/organization.js'
@@ -26,10 +26,10 @@ const depsFactory: CreateUserDepsFactory = (context) => {
 }
 
 async function lambdaHandler(event: CreateUserEvent, lambdaContext: LambdaContext): Promise<APIGatewayProxyResult> {
-  const context = createRequestContext(moduleContext, lambdaContext)
-  const authorizer = event.requestContext.authorizer.lambda
+  const context = requireRequestContext(lambdaContext)
+  const { context: authorizerContext } = context.getAuthorizer<{ context: { organizationId: string } }>()
   const input = {
-    organizationId: new OrganizationId(authorizer.context.organizationId),
+    organizationId: new OrganizationId(authorizerContext.organizationId),
     email: new Email(event.body.email),
     userName: new UserName(event.body.userName),
   }

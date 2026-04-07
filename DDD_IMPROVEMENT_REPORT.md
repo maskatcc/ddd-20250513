@@ -9,6 +9,7 @@
 | 2026-04-04 | Priority 3: エンティティの充実（readonly / equals / reconstruct） |
 | 2026-04-04 | Priority 4: エラーハンドリングの型安全化 + グローバル例外ハンドラ |
 | 2026-04-06 | Priority 5: FunctionContextスコープ分離 + 高階関数パターン + middyバンドル |
+| 2026-04-07 | Priority 6: FunctionRequestContextのミドルウェア化 + アプリログ構造化 + 認証情報の保持 |
 
 ## 背景
 
@@ -742,6 +743,100 @@ Lambda handler
 - **統一されたドメインロジックパターン**: `domainLogic(depsFactory)(context, input)` で全ドメインロジックのシグネチャが統一。階層化にも自然に対応
 - **Gateway ライフサイクルの標準化**: PowerTools と同一のモジュールスコープ初期化 + middy ミドルウェアパターンに統一
 - **テスト共通化**: `mockRequestContext` の一元管理により、テストファイル間のモック定義の重複を排除
+
+---
+
+## Priority 6: FunctionRequestContextのミドルウェア化 + アプリログ構造化 + 認証情報の保持
+
+### 背景
+
+Priority 5 で `FunctionRequestContext` をモジュール/リクエストの2スコープに分離し、PowerTools / Gateway / parser の各ミドルウェアを `commonMiddleware` に集約した結果、Lambda ハンドラの定型処理は大幅に減った。しかしまだ次の課題が残っていた。
+
+| 課題 | 影響 |
+|------|------|
+| `createRequestContext(moduleContext, lambdaContext)` の呼び出しが各ハンドラの冒頭に残っている | 新しい Lambda 追加のたびに同じ1行を書く必要がある。戻り値を使わなければビルドは通るので、書き忘れを型で検出できない |
+| コンテキストのライフサイクルが分散している | 生成はハンドラ内、終了処理はどこにもない。「リクエスト開始ログ」「終了ログ」「duration 計測」を共通化できる集約点がない |
+| アプリ視点のログとオブザーバビリティ視点のログが混在している | `logInfo('something')` と「リクエスト開始/終了」が同じレベルで出力され、CloudWatch Logs Insights でアプリ視点のフィルタが書きづらい |
+| HTTP ヘッダー / Authorizer 情報がハンドラ・repo 層に散在 | 「誰が呼んだか」「どんなトークンで来たか」を構造化して扱う場所がない。repo 層がアクセストークンを参照したいときの公式な経路がなく、ハンドラから個別に渡す必要がある |
+
+これらをフェーズ A・B の2段階で改善した。
+
+### 設計方針
+
+#### フェーズ A: コンテキストのライフサイクルを middy ミドルウェアへ
+
+- **ライフサイクル整合性を出発点にする**: `FunctionRequestContext` のライフサイクルは Lambda の `Context` (per-invocation) と完全に一致する。両者を別オブジェクトで管理する積極的な理由はない
+- **TypeScript declaration merging で `Context` を直接拡張する**: `aws-lambda` の `Context` に `requestContext?: FunctionRequestContext` を optional で追加。WeakMap や `request.internal` のような間接層を排除し、middleware が attach → ハンドラが直接読む素直な経路にする。Lambda 専業プロジェクトなので `Context` 型のグローバル拡張は意味的にも整合する
+- **ハンドラのシグネチャ `(event, lambdaContext)` は変えない**: optional 型を non-null に narrow するヘルパー `requireRequestContext(lambdaContext)` を1行入れるだけで使える形にして、middy の handler ラッパーには手を加えない。ボイラープレートを増やさない最小の変更
+- **`elapsedMs()` を `FunctionRequestContext` 自身に持たせる**: middleware は per-invocation でリクエストを共有するが、middleware オブジェクトは warm invocation 間で再利用される。クロージャ変数で start 時刻を持つと並行実行で破綻するため、状態はリクエストスコープのインスタンス（`FunctionRequestContext`）に閉じ込める
+
+#### フェーズ B: アプリログの構造化と認証情報の保持
+
+- **「アプリログ」を一級の概念として導入する**: 開発者が任意に呼ぶ `logInfo` 等とは別に、「リクエスト主体・状態の構造化記録」を `logApp(payload: AppLog)` として interface に定義。判別共用体の `AppLog` 型でイベントごとの必須フィールドを型で強制する
+- **自動付与は `logApp` の内部に閉じる**: `requestId` / `functionName` / `headers` / `durationMs` は呼び出し側が書かない。middleware も末端の handler も、イベント固有部分（`statusCode` 等）だけを渡す。重複や付与忘れが構造的に起きない設計
+- **ヘッダーマスクはブラックリスト方式**: 通常のヘッダーは観測可能性のために素通し、`Authorization` と `Referer` のみマスクする。「機微情報を誤って公開するリスク」と「ヘッダーが見えないことによるデバッグ困難」のトレードオフで前者を取る判断
+- **`accessToken` は interface に出す、`headers` / `authorizer` は具象クラスに留める**: ドメイン層 (`IFunctionRequestContext`) に HTTP の生構造を漏らさないため。アクセストークンは「リクエスト主体性」という普遍概念として interface に置けるが、ヘッダーや authorizer の生 JSON はトランスポート詳細であり、ドメインが知るべきでない。`headers` / `authorizer` / `getAuthorizer<T>()` は `FunctionRequestContext` 具象クラスのみが持ち、handler 経由でしかアクセスできない
+- **`getAuthorizer<T>()` で型責任を呼び出し側に渡す**: authorizer の context スキーマは Lambda ごとに違う。`FunctionRequestContext` 自体をジェネリック化すると `requireRequestContext` の戻り型まで波及してしまう。代わりに「`unknown` を保持し、取得時にジェネリックメソッドでキャスト」とすることで、ジェネリック化の波及をゼロに保ちつつ、ハンドラ内では型付きで扱える。型主張は実行時検証ではなく「ドキュメントとしての宣言」と割り切る
+- **アプリログ専用の Logger インスタンスを分ける**: PowerTools Logger は固定フィールド（`cold_start`, `function_arn`, `function_memory_size`, `sampling_rate` 等）を必ず付与する。一般のオブザーバビリティログでは X-Ray 連携やコールドスタート検知のために有用だが、アプリログにとってはノイズ。両立のため `MinimalLogFormatter` を作り、`FunctionModuleContext` に `appLogger`（専用 Logger）を追加。`logInfo` 系は従来の logger、`logApp` のみ専用 logger を使う
+- **`createRequestContext` は options object 形式に切り替え**: 引数が `headers` / `authorizer` / `accessToken` と増えたため、位置引数を捨てて名前付きオブジェクトにする。middleware からだけ呼ばれる関数なので、位置の暗黙ルールよりも可読性を優先する
+
+### 主な変更
+
+```
+src/
+├── domains/commons/
+│   ├── appLog.ts                     [新規] AppLog 判別共用体（イベント固有部分のみ）
+│   └── IFunctionRequestContext.ts    accessToken / logApp / elapsedMs を追加
+├── runtime/
+│   ├── minimalLogFormatter.ts        [新規] PowerTools 固定フィールドを除く LogFormatter
+│   ├── functionModuleContext.ts      appLogger（MinimalLogFormatter 適用）を追加
+│   ├── functionRequestContext.ts     declaration merging / startedAt / elapsedMs /
+│   │                                 headers / authorizer / accessToken /
+│   │                                 getAuthorizer<T>() / logApp / maskHeaders /
+│   │                                 requireRequestContext /
+│   │                                 createRequestContext を options 形式へ
+│   └── mockFunctionRequestContext.ts accessToken / logApp を追加
+├── middleware/
+│   ├── requestContext.ts             [新規] before/after/onError で logApp 出力、
+│   │                                 event から headers/authorizer/accessToken を抽出
+│   └── commonMiddleware.ts           requestContextMiddleware を組み込み
+├── lambda/
+│   ├── createUser/index.ts           requireRequestContext + getAuthorizer に置換
+│   └── queryUsers/index.ts           同上
+└── schemas/
+    └── lambdaAuthorizerSchema.ts     accessToken: z.string() を追加
+```
+
+### 効果
+
+- **ハンドラの定型処理がさらに削減**: `createRequestContext` の呼び出しが消え、`requireRequestContext(lambdaContext)` の1行に置き換わる。`event.requestContext.authorizer.lambda` への直接アクセスも消滅し、`context.getAuthorizer<T>()` で型付きアクセス
+- **アプリログが構造化されて検索しやすい**: CloudWatch Logs Insights で `event = "request.start"` や `durationMs > 1000` のようなクエリが直接書ける。`durationMs` が全 appLog エントリに自動付与されるため、レイテンシ分析が message 文字列に依存しない
+- **アプリログのノイズが激減**: PowerTools 固定フィールドが除外され、appLog 1行が必要最小フィールドのみで読める
+- **repo 層がアクセストークンを公式経路で取得**: `this.context.accessToken` を直接参照でき、authorizer.lambda の生構造を知らなくて済む。インターフェース経由なのでテスト時のモック差し替えも容易（`mockRequestContext` に `accessToken: 'mock-access-token'` を設定済み）
+- **layering の原則を維持**: `IFunctionRequestContext` には `accessToken` / `logApp` のみ追加され、HTTP ヘッダーや authorizer の生 JSON はドメイン層に漏れない
+- **並行安全性**: `startedAt` を `FunctionRequestContext` のインスタンスフィールドにすることで、middleware のクロージャ変数に依存しない設計。将来 provisioned concurrency や streamifyResponse を導入しても壊れない
+- **書き忘れの検出可能性向上**: `requireRequestContext` は middleware 未登録時に明示的に例外を投げる。生成漏れが実行時の最初のリクエストで即座に発見される
+
+### 出力イメージ（テスト時）
+
+```json
+{
+  "level": "INFO",
+  "message": "appLog",
+  "timestamp": "2026-04-07T05:00:52.595Z",
+  "functionName": "aws-lambda-mock-context",
+  "durationMs": 0,
+  "requestId": "c09aaf00-...",
+  "headers": {
+    "X-AMZ-Date": "20231001T000000Z",
+    "Accept": "application/json",
+    "Content-Type": "application/json"
+  },
+  "event": "request.start"
+}
+```
+
+PowerTools 固定フィールド（`cold_start`, `function_arn`, `function_memory_size`, `sampling_rate` 等）は出力されない。一方、`logInfo` / `logWarn` / `logError` は従来通り PowerTools の標準フィールド付きで出力されるため、運用時のフィルタリング・X-Ray 連携を維持する。
 
 ---
 

@@ -6,6 +6,7 @@ import { logMetrics } from '@aws-lambda-powertools/metrics/middleware'
 import type { Context as LambdaContext, APIGatewayProxyResult } from 'aws-lambda'
 import { FunctionModuleContext } from '../runtime/functionModuleContext.js'
 import { zodParseErrorHandler } from './zodParseErrorHandler.js'
+import { requestContextMiddleware } from './requestContext.js'
 
 export function commonMiddleware<TEvent>(moduleContext: FunctionModuleContext) {
   const { logger, tracer, metrics } = moduleContext
@@ -16,6 +17,7 @@ export function commonMiddleware<TEvent>(moduleContext: FunctionModuleContext) {
     .use(injectLambdaContext(logger))
     .use(captureLambdaHandler(tracer))
     .use(logMetrics(metrics))
+    .use(requestContextMiddleware(moduleContext))
 
   return {
     use(middleware: Parameters<typeof chain.use>[0]) {

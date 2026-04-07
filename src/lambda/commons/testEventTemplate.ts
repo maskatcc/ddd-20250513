@@ -42,6 +42,7 @@ export const eventTemplate: APIGatewayProxyEventV2 = {
         principalId: 'taro',
         context: {
           organizationId: 'xxx-xxxx-xxxx-xxx',
+          accessToken: 'mock-access-token',
         },
       },
     },
