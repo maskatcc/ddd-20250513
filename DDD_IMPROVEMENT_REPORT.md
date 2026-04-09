@@ -10,6 +10,7 @@
 | 2026-04-04 | Priority 4: エラーハンドリングの型安全化 + グローバル例外ハンドラ |
 | 2026-04-06 | Priority 5: FunctionContextスコープ分離 + 高階関数パターン + middyバンドル |
 | 2026-04-07 | Priority 6: FunctionRequestContextのミドルウェア化 + アプリログ構造化 + 認証情報の保持 |
+| 2026-04-09 | Priority 7: DomainResultの型安全性強化 — エラー宣言と伝搬 |
 
 ## 背景
 
@@ -904,6 +905,282 @@ lambda → middleware → runtime → domains ← infrastructures
 - Lambda 層に PowerTools（`@aws-lambda-powertools/logger`, `tracer`, `metrics`）の直接 import がないこと（`parser/middleware` は除く）
 - functions 層に `infrastructures/` の import がないこと
 
+---
+
+## Priority 7: DomainResultの型安全性強化 — エラー宣言と伝搬
+
+### 背景
+
+Priority 4 で `DomainResult<T, E>` 型・`succeed()` / `fail()` 関数・`httpError()` ユーティリティを導入し、ドメインエラーを型で表現するインフラを整備した。しかし実際のドメインロジック（`createUser`, `queryUsers`）は冪等設計のためビジネスルール違反が存在せず、`DomainResult` は「型定義はあるが使われていない」状態だった。
+
+このまま放置すると、将来ビジネスルールが追加された時点で以下の問題に直面する。
+
+| 課題 | 影響 |
+|------|------|
+| `DomainError = { code: string, message: string }` の `code` が `string` 型 | 関数の戻り値型からエラー種別が読めない。`switch` 分岐の網羅性チェックが効かない |
+| `httpError(statusCode, domainError)` の `statusCode` が呼び出し側の手書き数値 | `code` と HTTP ステータスの対応関係が型で表現されず、マッピング漏れが実行時まで分からない |
+| `httpError` が `code` と `message` しかレスポンスボディに含めない | 構造化ペイロード（重複メールアドレス等）をクライアントに返せない。`message` 文字列に詰め込む運用になる |
+| 階層化されたドメインロジック間でのエラー伝搬パターンが未定義 | 下位関数の失敗詳細（構造化 JSON）を上位でどう引き継ぐか、各実装者の判断に委ねられる |
+
+Priority 7 では、**2 つの軸**でこれらを解決する。
+
+### 設計方針
+
+#### 軸 1: 各関数が「自身が返すエラーコード」を宣言する
+
+ドメインロジックの戻り値型 `Promise<DomainResult<T, ErrorUnion>>` だけで「この関数はどのエラーを返しうるか」を静的に宣言できるようにする。呼び出し側は `switch(result.domainError.code)` で literal union の網羅性チェックを受けられる。
+
+**`DomainError` のジェネリック化:**
+
+```typescript
+// 変更前
+export type DomainError = { code: string, message: string }
+
+// 変更後
+export type DomainError<
+  Code extends string = string,
+  Payload extends Record<string, unknown> = Record<string, never>,
+> = Readonly<
+  { code: Code, message: string } &
+  ([Payload] extends [Record<string, never>] ? {} : { payload: Payload })
+>
+```
+
+- **`Code` ジェネリクス**: `string` → literal union（`'USER_EMAIL_ALREADY_REGISTERED'` 等）に絞ることで、`switch` の網羅性チェックが有効になる
+- **`Payload` ジェネリクス**: エラーに付随する構造化データ（重複したメールアドレス等）を型安全に持たせる。未指定時（`Record<string, never>` = デフォルト）は `payload` フィールド自体が型から消える（条件型で制御）。これにより Payload を必要としないエラーは `{ code, message }` のみのシンプルな型になる
+- **`Readonly`**: エラーオブジェクトの不変性を型レベルで保証
+
+**ドメインエラー型の定義パターン:**
+
+```typescript
+// src/domains/commons/errors.ts
+
+// Payload あり — { code, message, payload: { email } }
+export type EmailAlreadyRegistered = DomainError<
+  'USER_EMAIL_ALREADY_REGISTERED',
+  { email: string }
+>
+
+// Payload なし — { code, message }
+export type OrganizationNotFound = DomainError<'ORGANIZATION_NOT_FOUND'>
+```
+
+エラー型は `src/domains/commons/errors.ts` に集約する。ドメイン固有のエラーが増えた場合は、ドメイン単位のファイル（`src/domains/user/errors.ts` 等）に分割する選択肢もあるが、現時点ではエラー型が少数であり、横断的に参照されることも想定されるため commons に配置する。
+
+**関数のエラー宣言:**
+
+```typescript
+// 将来ビジネスルールが追加された場合のイメージ
+export type CreateUserError = EmailAlreadyRegistered | OrganizationNotFound
+
+export function createUser(depsFactory: CreateUserDepsFactory) {
+  return async (
+    context: IFunctionRequestContext,
+    input: CreateUserInput,
+  ): Promise<DomainResult<UserId, CreateUserError>> => {
+    // ...
+    if (duplicated) {
+      return fail<EmailAlreadyRegistered>({
+        code: 'USER_EMAIL_ALREADY_REGISTERED',
+        message: 'Email is already registered.',
+        payload: { email: input.email.value },
+      })
+    }
+    return succeed(targetUser.id)
+  }
+}
+```
+
+戻り値型 `DomainResult<UserId, CreateUserError>` を読むだけで「この関数は `USER_EMAIL_ALREADY_REGISTERED` と `ORGANIZATION_NOT_FOUND` の 2 種しか返さない」が分かる。
+
+**`assertNever` ヘルパー:**
+
+```typescript
+export function assertNever(x: never): never {
+  throw new Error(`Unhandled domain error: ${JSON.stringify(x)}`)
+}
+```
+
+`switch` の `default` 節で使うことで、新しい code を追加した際に対応漏れがコンパイルエラーとして検出される。
+
+#### 軸 2: 呼び出し元がエラーのとき、詳細（JSON）を上位に伝搬させる
+
+ドメインロジックが別のドメインロジックを呼ぶ階層構造で、下位の失敗結果（構造化ペイロード付き）を**そのまま上位に返せる**パターンを確立する。
+
+**伝搬パターン:**
+
+```typescript
+type OnboardingError = CreateUserError | AuditLogError
+
+export function orchestrateOnboarding(depsFactory: OnboardingDepsFactory) {
+  return async (
+    ctx: IFunctionRequestContext,
+    input: OnboardingInput,
+  ): Promise<DomainResult<UserId, OnboardingError>> => {
+    const userResult = await createUser(depsFactory)(ctx, input.user)
+    if (!userResult.successful) return userResult   // ← 詳細 JSON がそのまま伝搬
+
+    const auditResult = await writeAuditLog(depsFactory)(ctx, userResult.domainValue)
+    if (!auditResult.successful) return auditResult
+    return succeed(userResult.domainValue)
+  }
+}
+```
+
+- `CreateUserError ⊆ OnboardingError` の部分型関係により `if (!r.successful) return r` が型チェックを通る
+- `domainError` オブジェクト（`code`, `message`, `payload`）がコピーなしでそのまま上位に伝わる
+- 上位のエラー union に下位のエラー型を追加するだけで伝搬経路が型安全に成立する
+
+**ヘルパーを導入しない理由:** `if (!r.successful) return r` で十分明示的であり、TypeScript の構造的部分型だけで伝搬が型安全に成立する。`flatMap`/`bind` 等の抽象は Lambda + サーバーレスの文脈では過剰。Priority 5 の「`depsFactory` を束縛せずインラインで呼ぶ」判断と同じ方針。
+
+**HTTP レスポンスへの詳細 JSON 伝搬:**
+
+最終的に Lambda ハンドラに届いた失敗は、`domainError` の全フィールドを HTTP レスポンスボディに展開する。
+
+```typescript
+// DomainErrorStatusMap — E のすべての code を網羅していることを型で強制
+export type DomainErrorStatusMap<E extends DomainError> = {
+  readonly [K in E['code']]: number
+}
+
+// httpDomainError — body は { code, message, payload? } 構造
+export function httpDomainError<E extends DomainError>(
+  domainError: E,
+  statusMap: DomainErrorStatusMap<E>,
+) {
+  const error = createHttpError(statusMap[domainError.code as E['code']])
+  const body: Record<string, unknown> = { code: domainError.code, message: domainError.message }
+  if ('payload' in domainError) body.payload = domainError.payload
+  error.message = JSON.stringify(body)
+  return error
+}
+```
+
+- `DomainErrorStatusMap<E>` は Mapped Types で `E['code']` の全 literal を key として要求する。`satisfies` と組み合わせることで、エラー種別の追加時に HTTP ステータスマッピングの追加漏れがコンパイルエラーになる
+- 既存の `httpError(statusCode, domainError)` は後方互換のため残す。新規のドメインエラー経路は `httpDomainError` に寄せる
+- `payload` フィールドの有無は `'payload' in domainError` で動的に判定し、あれば body に含める。Payload を持たないエラーのレスポンスボディは `{ code, message }` のまま
+
+**Lambda ハンドラでの結果処理パターン:**
+
+```typescript
+// 将来ビジネスルールが追加された場合のイメージ
+const result = await createUser(depsFactory)(context, input)
+if (!result.successful) {
+  throw httpDomainError(result.domainError, {
+    USER_EMAIL_ALREADY_REGISTERED: 409,
+    ORGANIZATION_NOT_FOUND: 404,
+  } satisfies DomainErrorStatusMap<CreateUserError>)
+}
+return httpValue({ userId: result.domainValue.value })
+```
+
+- `satisfies` により、`CreateUserError` に新しい code を追加すると statusMap 側もコンパイル時に必須化される
+- `satisfies` は型を絞らないので、statusMap の値型は `number` のまま保たれる
+
+### 段階的な移行: `DomainResult<T, never>` ベース
+
+現時点の `createUser` / `queryUsers` にはビジネスルール違反が存在しない（冪等設計のため）。しかし「機構を整備しただけで使わない」状態では死蔵のリスクがある。
+
+そこで、**既存のドメインロジックの戻り値型を `Promise<DomainResult<T, never>>` に移行**し、パターンを確立する方針を採用した。
+
+```typescript
+// src/functions/userLogic/createUser.ts
+export function createUser(depsFactory: CreateUserDepsFactory) {
+  return async (
+    context: IFunctionRequestContext,
+    input: CreateUserInput,
+  ): Promise<DomainResult<UserId, never>> => {
+    // ... ビジネスロジック（変更なし）
+    return succeed(targetUser.id)
+  }
+}
+```
+
+エラー型が `never` であることの意味:
+- **関数シグネチャ**: 「この関数は現時点でドメインエラーを返さない」を型で明示。将来ビジネスルールが追加されたら `never` → `CreateUserError` に変えるだけ
+- **ハンドラ側**: `DomainErrorStatusMap<never>` は空オブジェクト `{}` で `satisfies` が通る。エラー型が追加された瞬間にコンパイルエラーでマッピング追加を強制
+
+```typescript
+// src/lambda/createUser/index.ts
+const result = await createUser(depsFactory)(context, input)
+if (!result.successful) {
+  throw httpDomainError(result.domainError, {} satisfies DomainErrorStatusMap<never>)
+}
+return httpValue({ userId: result.domainValue.value })
+```
+
+この段階的移行により、**ハンドラの構造変更なし**でビジネスルールを追加できる状態になった。
+
+### 型レベルのテスト
+
+型システムの挙動を `expect-type` で検証する contract テストを新設した。
+
+```typescript
+// src/domains/commons/DomainResult.contract.test.ts
+
+describe('DomainError', () => {
+  it('Payload 未指定時は payload フィールドが存在しない', () => {
+    type E = DomainError<'NOT_FOUND'>
+    expectTypeOf<E>().toEqualTypeOf<Readonly<{ code: 'NOT_FOUND', message: string }>>()
+  })
+
+  it('Payload 指定時は payload フィールドが型付きで存在する', () => {
+    type E = DomainError<'DUPLICATED', { email: string }>
+    expectTypeOf<E>().toEqualTypeOf<Readonly<{ code: 'DUPLICATED', message: string, payload: { email: string } }>>()
+  })
+})
+
+describe('DomainErrorStatusMap', () => {
+  it('code の網羅を強制する', () => {
+    type E = DomainError<'A'> | DomainError<'B'>
+    // @ts-expect-error — B 欠落でコンパイルエラー
+    const _bad: DomainErrorStatusMap<E> = { A: 400 }
+  })
+
+  it('never の場合は空オブジェクトで通る')
+})
+
+describe('DomainResult 伝搬', () => {
+  it('下位のエラー結果が上位の union に代入できる', () => {
+    type Sub = DomainError<'A'>
+    type Super = DomainError<'A'> | DomainError<'B'>
+    expectTypeOf<DomainResult<number, Sub>>().toExtend<DomainResult<number, Super>>()
+  })
+})
+```
+
+### 主な変更
+
+```
+src/
+├── domains/commons/
+│   ├── DomainResult.ts                  DomainError<Code, Payload> ジェネリック化、
+│   │                                    assertNever 追加
+│   ├── errors.ts                        [新規] サンプルエラー型定義
+│   │                                    （EmailAlreadyRegistered, OrganizationNotFound）
+│   └── DomainResult.contract.test.ts    [新規] 型レベルの網羅性・伝搬テスト
+├── functions/userLogic/
+│   ├── createUser.ts                    戻り値 Promise<DomainResult<UserId, never>>、
+│   │                                    succeed() で包む
+│   ├── queryUsers.ts                    同上（DomainResult<UserQueryResult[], never>）
+│   ├── createUser.test.ts              assert を { successful, domainValue } 形式に
+│   └── queryUsers.test.ts              同上
+└── lambda/
+    ├── commons/httpResponse.ts          DomainErrorStatusMap<E>、httpDomainError 追加
+    ├── createUser/index.ts              結果処理を httpDomainError + satisfies パターンに
+    ├── createUser/index.test.ts         モック戻り値を DomainResult 形式に
+    ├── queryUsers/index.ts              同上
+    └── queryUsers/index.test.ts         同上
+```
+
+### 効果
+
+- **エラー宣言の静的可読性**: 関数の戻り値型 `DomainResult<T, ErrorUnion>` を読むだけで、返しうるエラーの全集合が分かる。コードリーディング時に実装を辿る必要がない
+- **網羅性チェックのコンパイル時強制**: `DomainErrorStatusMap<E>` + `satisfies` により、エラー種別の追加時に HTTP ステータスマッピングの追加漏れがコンパイルエラーになる。`assertNever` で `switch` 分岐の網羅性も保証
+- **構造化ペイロードの型安全な伝搬**: `DomainError<Code, Payload>` でエラーに付随するデータを型付きで定義。`httpDomainError` がレスポンスボディに `{ code, message, payload }` 構造で展開。ドメインロジック→Lambda ハンドラ→HTTP レスポンスの全経路でフィールドが欠落しない
+- **階層呼び出しでの透過的伝搬**: `if (!r.successful) return r` で下位の `domainError` がそのまま上位に伝わる。union 型の部分型関係で型安全性を担保
+- **段階的移行の完了**: 既存ロジックを `DomainResult<T, never>` に移行済み。将来ビジネスルール追加時はエラー型の `never` を具体型に変えるだけで、ハンドラの構造変更は不要
+
 ## テスト結果
 
-全15ファイル・57テストがパス。各 Priority 実装後にテスト全パス・TypeScript 型チェック通過を確認済み。
+全16ファイル・62テストがパス。各 Priority 実装後にテスト全パス・TypeScript 型チェック通過を確認済み。

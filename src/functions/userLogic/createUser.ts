@@ -2,6 +2,7 @@ import { Email, User, UserId, UserName } from '../../domains/user/user.js'
 import { OrganizationId } from '../../domains/organization/organization.js'
 import { IUserRepository, IUserOrganizationRepository, IUserNotificationRepository } from '../../domains/user/repositories/index.js'
 import { IFunctionRequestContext } from '../../domains/commons/IFunctionRequestContext.js'
+import { DomainResult, succeed } from '../../domains/commons/DomainResult.js'
 
 export type CreateUserDeps = {
   userRepository: IUserRepository
@@ -18,7 +19,7 @@ export type CreateUserInput = {
 }
 
 export function createUser(depsFactory: CreateUserDepsFactory) {
-  return async (context: IFunctionRequestContext, input: CreateUserInput): Promise<UserId> => {
+  return async (context: IFunctionRequestContext, input: CreateUserInput): Promise<DomainResult<UserId, never>> => {
     const { userRepository, userOrganizationRepository, userNotificationRepository } = depsFactory(context)
 
     let targetUser: User
@@ -52,6 +53,6 @@ export function createUser(depsFactory: CreateUserDepsFactory) {
       await userNotificationRepository.verifyEmail(targetUser.id)
     }
 
-    return targetUser.id
+    return succeed(targetUser.id)
   }
 }
