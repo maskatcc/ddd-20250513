@@ -9,7 +9,7 @@ import { OrganizationId } from '../../domains/organization/organization.js'
 import { queryUsers, QueryUsersDepsFactory } from '../../functions/userLogic/queryUsers.js'
 import { PostgresqlUserQueryRepository } from '../../infrastructures/postgresql/postgresqlUserQueryRepository.js'
 import { QueryUsersEvent, QueryUsersEventSchema } from './schema.js'
-import { httpValue } from '../commons/httpResponse.js'
+import { httpValue, httpDomainError, DomainErrorStatusMap } from '../commons/httpResponse.js'
 
 // モジュールスコープで初期化（warm invocationで再利用）
 const moduleContext = await FunctionModuleContext.create()
@@ -25,9 +25,12 @@ async function lambdaHandler(event: QueryUsersEvent, lambdaContext: LambdaContex
   const input = {
     organizationId: new OrganizationId(authorizerContext.organizationId),
   }
-  const users = await queryUsers(depsFactory)(context, input)
+  const result = await queryUsers(depsFactory)(context, input)
+  if (!result.successful) {
+    throw httpDomainError(result.domainError, {} satisfies DomainErrorStatusMap<never>)
+  }
 
-  return httpValue({ users })
+  return httpValue({ users: result.domainValue })
 }
 
 export const handler = commonMiddleware<QueryUsersEvent>(moduleContext)

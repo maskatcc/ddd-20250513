@@ -25,7 +25,7 @@ describe('queryUsers', () => {
     const result = await queryUsers(() => deps)(mockRequestContext, { organizationId })
 
     // assert
-    expect(result).toEqual(users)
+    expect(result).toEqual({ successful: true, domainValue: users })
     expect(mockUserQueryService.query).toHaveBeenCalledWith(organizationId)
   })
 })

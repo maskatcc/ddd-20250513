@@ -37,7 +37,7 @@ describe('createUser', () => {
     const result = await createUser(() => deps)(mockRequestContext, { organizationId, email, userName })
 
     // assert
-    expect(result).toEqual(userId)
+    expect(result).toEqual({ successful: true, domainValue: userId })
     expect(mockUserRepository.findByEmail).toHaveBeenCalledWith(email)
     expect(mockUserRepository.create).toHaveBeenCalledWith(userName, email)
     expect(mockUserRepository.findById).toHaveBeenCalledWith(userId)
@@ -72,7 +72,7 @@ describe('createUser', () => {
     const result = await createUser(() => deps)(mockRequestContext, { organizationId, email, userName })
 
     // assert
-    expect(result).toEqual(userId)
+    expect(result).toEqual({ successful: true, domainValue: userId })
     expect(mockUserRepository.findByEmail).toHaveBeenCalledWith(email)
     expect(mockUserOrganizationRepository.joinOrganization).toHaveBeenCalledWith(userId, organizationId)
     expect(mockUserNotificationRepository.verifyEmail).toHaveBeenCalledWith(userId)
