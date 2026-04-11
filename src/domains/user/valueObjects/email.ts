@@ -1,4 +1,5 @@
 import { LengthSpec, RequiredSpec, StringValueObject } from '../../commons/StringValueObject.js'
+import { ValidationException } from '../../commons/exceptions.js'
 
 export class Email extends StringValueObject implements RequiredSpec, LengthSpec {
   private static readonly regex = new RegExp('^.+@.+$')
@@ -10,7 +11,7 @@ export class Email extends StringValueObject implements RequiredSpec, LengthSpec
     super(value)
 
     if (Email.regex.test(value) === false) {
-      throw new Error(`メールアドレスの形式が正しくありません。`)
+      throw new ValidationException(`メールアドレスの形式が正しくありません。`)
     }
   }
 }

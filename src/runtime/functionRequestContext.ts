@@ -1,5 +1,6 @@
 import { Context as LambdaContext } from 'aws-lambda'
 import { AppLog } from '../domains/commons/appLog.js'
+import { ConfigurationException } from '../domains/commons/exceptions.js'
 import { IFunctionRequestContext } from '../domains/commons/IFunctionRequestContext.js'
 import { FunctionModuleContext } from './functionModuleContext.js'
 
@@ -94,7 +95,7 @@ export function createRequestContext(
 
 export function requireRequestContext(lambdaContext: LambdaContext): FunctionRequestContext {
   if (!lambdaContext.requestContext) {
-    throw new Error('requestContextMiddleware is not registered in the middy chain')
+    throw new ConfigurationException('requestContextMiddleware is not registered in the middy chain')
   }
   return lambdaContext.requestContext
 }

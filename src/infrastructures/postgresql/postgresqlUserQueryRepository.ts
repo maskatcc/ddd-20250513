@@ -1,4 +1,5 @@
 import { OrganizationId } from '../../domains/organization/organization.js'
+import { InternalException } from '../../domains/commons/exceptions.js'
 import { IFunctionRequestContext } from '../../domains/commons/IFunctionRequestContext.js'
 import { IUserQueryService, type UserQueryResult } from '../../domains/user/repositories/IUserQueryService.js'
 import { PostgresqlGateway } from '../../runtime/postgresqlGateway.js'
@@ -10,6 +11,6 @@ export class PostgresqlUserQueryRepository implements IUserQueryService {
   ) {}
 
   async query(_orgId: OrganizationId): Promise<UserQueryResult[]> {
-    throw new Error('Method not implemented.')
+    throw new InternalException('Method not implemented.')
   }
 }

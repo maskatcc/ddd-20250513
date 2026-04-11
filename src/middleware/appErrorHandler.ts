@@ -31,12 +31,14 @@ export const appErrorHandler = (logger: Logger): MiddlewareObj<unknown, APIGatew
       statusCode = 400
       message = error.message
       logger.error('ParseError', { error, traceId })
-    } else if (error instanceof AppException) {
+    }
+    else if (error instanceof AppException) {
       code = error.code
       statusCode = error.statusCode
       message = error.expose ? error.message : 'Internal Server Error'
       logger.error(`${error.name}: ${error.message}`, { error, traceId, ...error.context })
-    } else {
+    }
+    else {
       code = 'UNKNOWN_ERROR'
       statusCode = 500
       message = 'Internal Server Error'

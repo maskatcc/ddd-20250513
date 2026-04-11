@@ -1,3 +1,5 @@
+import { InternalException } from './exceptions.js'
+
 export type DomainError<
   Code extends string = string,
   Payload extends Record<string, unknown> = Record<string, never>,
@@ -20,5 +22,5 @@ export function fail<E extends DomainError>(domainError: E): DomainResult<never,
 }
 
 export function assertNever(x: never): never {
-  throw new Error(`Unhandled domain error: ${JSON.stringify(x)}`)
+  throw new InternalException(`Unhandled domain error: ${JSON.stringify(x)}`)
 }
