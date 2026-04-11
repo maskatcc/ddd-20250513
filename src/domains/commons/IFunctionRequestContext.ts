@@ -12,6 +12,9 @@ export interface IFunctionRequestContext {
   /** 認証主体のアクセストークン（Authorizer から伝播） */
   readonly accessToken: string
 
+  /** リクエスト追跡ID（クライアント送信 or Authorizer 生成、Authorizer context から伝播） */
+  readonly traceId: string
+
   /** 構造化アプリケーションログを出力 — requestId/functionName/headers/durationMs を自動付与 */
   logApp(payload: AppLog): void
 

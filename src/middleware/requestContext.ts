@@ -11,7 +11,7 @@ export const requestContextMiddleware = (
       headers?: Record<string, string | undefined>
       requestContext?: {
         authorizer?: {
-          lambda?: { context?: { accessToken?: string; [k: string]: unknown } }
+          lambda?: { context?: { accessToken?: string, traceId?: string, [k: string]: unknown } }
         }
       }
     }
@@ -23,11 +23,16 @@ export const requestContextMiddleware = (
     if (!accessToken) {
       throw new Error('accessToken is missing in authorizer context')
     }
+    const traceId = lambdaAuth.context?.traceId
+    if (!traceId) {
+      throw new Error('traceId is missing in authorizer context')
+    }
 
     const ctx = createRequestContext(moduleContext, request.context, {
       headers: event.headers ?? {},
       authorizer: lambdaAuth,
       accessToken,
+      traceId,
     })
     request.context.requestContext = ctx
     ctx.logApp({ event: 'request.start' })

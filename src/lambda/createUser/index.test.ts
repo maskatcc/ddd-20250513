@@ -30,6 +30,7 @@ describe('lambda/createUser', () => {
             context: {
               organizationId: organizationId.value,
               accessToken: 'mock-access-token',
+              traceId: 'mock-trace-id',
             },
           },
         },
