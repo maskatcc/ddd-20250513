@@ -1,4 +1,5 @@
 import { ImmutableValueObject } from './ImmutableValueObject.js'
+import { ValidationException } from './exceptions.js'
 
 export interface RequiredSpec {
   isRequired(): boolean
@@ -53,19 +54,19 @@ export class StringValueObject extends ImmutableValueObject<string> {
     super(value)
 
     if (typeof value !== 'string') {
-      throw new Error(`${value} は文字列型でなければいけません。`)
+      throw new ValidationException(`${value} は文字列型でなければいけません。`)
     }
 
     if (implementsRequiredSpec(this)) {
       if ((this as RequiredSpec).isRequired() && value === '') {
-        throw new Error(`${this.constructor.name} は必須値で空文字にできません。`)
+        throw new ValidationException(`${this.constructor.name} は必須値で空文字にできません。`)
       }
     }
 
     if (implementsLengthSpec(this)) {
       const maxLength = (this as LengthSpec).maxLength()
       if (maxLength < value.length) {
-        throw new Error(`${this.constructor.name} は最大長 ${maxLength} を超えています。`)
+        throw new ValidationException(`${this.constructor.name} は最大長 ${maxLength} を超えています。`)
       }
     }
   }

@@ -1,5 +1,6 @@
 import { Context as LambdaContext } from 'aws-lambda'
 import { AppLog } from '../domains/commons/appLog.js'
+import { ConfigurationException } from '../domains/commons/exceptions.js'
 import { IFunctionRequestContext } from '../domains/commons/IFunctionRequestContext.js'
 import { FunctionModuleContext } from './functionModuleContext.js'
 
@@ -34,6 +35,7 @@ export class FunctionRequestContext implements IFunctionRequestContext {
     readonly headers: Record<string, string | undefined>,
     private readonly authorizer: unknown,
     readonly accessToken: string,
+    readonly traceId: string,
   ) {}
 
   elapsedMs(): number {
@@ -49,21 +51,22 @@ export class FunctionRequestContext implements IFunctionRequestContext {
       functionName: this.functionName,
       durationMs: this.elapsedMs(),
       requestId: this.requestId,
+      traceId: this.traceId,
       headers: maskHeaders(this.headers),
       ...payload,
     })
   }
 
   logInfo(message: string, extra?: Record<string, unknown>): void {
-    this.raw.logger.info(message, { requestId: this.requestId, functionName: this.functionName, ...extra })
+    this.raw.logger.info(message, { requestId: this.requestId, traceId: this.traceId, functionName: this.functionName, ...extra })
   }
 
   logWarn(message: string, extra?: Record<string, unknown>): void {
-    this.raw.logger.warn(message, { requestId: this.requestId, functionName: this.functionName, ...extra })
+    this.raw.logger.warn(message, { requestId: this.requestId, traceId: this.traceId, functionName: this.functionName, ...extra })
   }
 
   logError(message: string, error?: Error, extra?: Record<string, unknown>): void {
-    this.raw.logger.error(message, { requestId: this.requestId, functionName: this.functionName, error, ...extra })
+    this.raw.logger.error(message, { requestId: this.requestId, traceId: this.traceId, functionName: this.functionName, error, ...extra })
   }
 }
 
@@ -71,6 +74,7 @@ export type CreateRequestContextOptions = {
   headers: Record<string, string | undefined>
   authorizer: unknown
   accessToken: string
+  traceId: string
 }
 
 export function createRequestContext(
@@ -85,12 +89,13 @@ export function createRequestContext(
     options.headers,
     options.authorizer,
     options.accessToken,
+    options.traceId,
   )
 }
 
 export function requireRequestContext(lambdaContext: LambdaContext): FunctionRequestContext {
   if (!lambdaContext.requestContext) {
-    throw new Error('requestContextMiddleware is not registered in the middy chain')
+    throw new ConfigurationException('requestContextMiddleware is not registered in the middy chain')
   }
   return lambdaContext.requestContext
 }

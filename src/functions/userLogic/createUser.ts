@@ -3,6 +3,7 @@ import { OrganizationId } from '../../domains/organization/organization.js'
 import { IUserRepository, IUserOrganizationRepository, IUserNotificationRepository } from '../../domains/user/repositories/index.js'
 import { IFunctionRequestContext } from '../../domains/commons/IFunctionRequestContext.js'
 import { DomainResult, succeed } from '../../domains/commons/DomainResult.js'
+import { InternalException } from '../../domains/commons/exceptions.js'
 
 export type CreateUserDeps = {
   userRepository: IUserRepository
@@ -32,7 +33,7 @@ export function createUser(depsFactory: CreateUserDepsFactory) {
       const newUserId = await userRepository.create(input.userName, input.email)
       const newUser = await userRepository.findById(newUserId)
       if (!newUser) {
-        throw new Error('NewUser not found.')
+        throw new InternalException('NewUser not found after creation', { email: input.email.value })
       }
       targetUser = newUser
     }

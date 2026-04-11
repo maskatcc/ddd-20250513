@@ -43,6 +43,7 @@ export const eventTemplate: APIGatewayProxyEventV2 = {
         context: {
           organizationId: 'xxx-xxxx-xxxx-xxx',
           accessToken: 'mock-access-token',
+          traceId: 'mock-trace-id',
         },
       },
     },

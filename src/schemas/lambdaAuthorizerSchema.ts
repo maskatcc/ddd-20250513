@@ -5,6 +5,7 @@ export const LambdaAuthorizerSchema = z.object({
   context: z.object({
     organizationId: z.string(),
     accessToken: z.string(),
+    traceId: z.string(),
   }),
 })
 

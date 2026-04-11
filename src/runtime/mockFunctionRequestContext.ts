@@ -8,6 +8,7 @@ export const mockRequestContext: IFunctionRequestContext = {
   },
   elapsedMs: vi.fn(() => 0),
   accessToken: 'mock-access-token',
+  traceId: 'mock-trace-id',
   logApp: vi.fn(),
   logInfo: vi.fn(),
   logWarn: vi.fn(),

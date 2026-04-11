@@ -1,19 +1,17 @@
 import middy from '@middy/core'
-import httpErrorHandler from '@middy/http-error-handler'
 import { injectLambdaContext } from '@aws-lambda-powertools/logger/middleware'
 import { captureLambdaHandler } from '@aws-lambda-powertools/tracer/middleware'
 import { logMetrics } from '@aws-lambda-powertools/metrics/middleware'
 import type { Context as LambdaContext, APIGatewayProxyResult } from 'aws-lambda'
 import { FunctionModuleContext } from '../runtime/functionModuleContext.js'
-import { zodParseErrorHandler } from './zodParseErrorHandler.js'
+import { appErrorHandler } from './appErrorHandler.js'
 import { requestContextMiddleware } from './requestContext.js'
 
 export function commonMiddleware<TEvent>(moduleContext: FunctionModuleContext) {
   const { logger, tracer, metrics } = moduleContext
 
   const chain = middy<TEvent, APIGatewayProxyResult>()
-    .use(httpErrorHandler({ logger: error => logger.error('Unhandled error', { error }) }))
-    .use(zodParseErrorHandler())
+    .use(appErrorHandler(logger))
     .use(injectLambdaContext(logger))
     .use(captureLambdaHandler(tracer))
     .use(logMetrics(metrics))

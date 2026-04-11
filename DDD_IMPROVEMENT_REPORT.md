@@ -11,6 +11,7 @@
 | 2026-04-06 | Priority 5: FunctionContextスコープ分離 + 高階関数パターン + middyバンドル |
 | 2026-04-07 | Priority 6: FunctionRequestContextのミドルウェア化 + アプリログ構造化 + 認証情報の保持 |
 | 2026-04-09 | Priority 7: DomainResultの型安全性強化 — エラー宣言と伝搬 |
+| 2026-04-11 | Priority 8: 想定外エラーの例外型設計 + traceId 統合 |
 
 ## 背景
 
@@ -1181,6 +1182,253 @@ src/
 - **階層呼び出しでの透過的伝搬**: `if (!r.successful) return r` で下位の `domainError` がそのまま上位に伝わる。union 型の部分型関係で型安全性を担保
 - **段階的移行の完了**: 既存ロジックを `DomainResult<T, never>` に移行済み。将来ビジネスルール追加時はエラー型の `never` を具体型に変えるだけで、ハンドラの構造変更は不要
 
+---
+
+## Priority 8: 想定外エラーの例外型設計 + traceId 統合
+
+### 目的
+
+「想定外エラー」に構造化された例外型を導入し、エラーレスポンスの形式を統一する。あわせて、クライアントからのエラー問い合わせ時にログを特定できるよう、全エラーレスポンスに traceId を含める。
+
+### 背景
+
+Priority 7 までで「期待されるビジネスエラー」は `DomainResult<T, E>` で型安全に扱えるようになった。しかし「想定外エラー」——値オブジェクトのバリデーション失敗、authorizer 未設定、作成直後の findById 失敗——はすべて `throw new Error('message')` のままだった。middy の `httpErrorHandler` がこれらを一律 500 で返すため、以下の問題があった。
+
+| 分類 | 現状の例 | 問題 |
+|------|---------|------|
+| 入力バリデーション | 値オブジェクトコンストラクタの `throw` | 本来 400 だが 500 で返る。メッセージも非公開 |
+| 構成ミス | authorizer 未設定、middleware 未登録 | エラーの種別が不明。運用上の原因特定が困難 |
+| 内部整合性 | 作成直後の findById 失敗、未実装メソッド | デバッグ情報がログに残らない |
+
+さらに、エラーレスポンスの形式がドメインエラー（`{ code, message, payload? }`）と想定外エラー（middy デフォルトの `{ message }` のみ）で異なっていた。クライアントがエラー種別を判定するには `code` フィールドが必須だが、想定外エラーにはそれがなかった。
+
+もう一つの課題として、エラー発生時のログ特定がある。クライアントからエラーについて問い合わせを受けたとき、該当リクエストのログを特定する手段がなかった。traceId をレスポンスに含めることで、クライアントは「このエラーの traceId は `abc-123` です」と報告でき、運用チームはその traceId でログを検索して原因調査できる。
+
+### 設計方針
+
+#### エラーの二系統（DomainResult vs AppException）
+
+エラーを「期待されるもの」と「想定外のもの」の二系統に明確に分離する。
+
+- **DomainResult<T, E>**: 期待されるビジネスエラー。戻り値として返す（制御フロー）
+- **AppException**: 想定外エラー。throw する（例外フロー）
+
+この二系統は設計意図が異なる。DomainResult は「この関数はこのエラーを返しうる」を型で宣言する。AppException は「本来ここに到達すべきでない」を表明する。混同すると、ビジネスルールの網羅性チェック（`satisfies`）が機能しなくなる。
+
+#### なぜ3種だけか
+
+全 throw サイトを分類すると3種に収まる。
+
+| 例外クラス | code | statusCode | expose | 用途 |
+|-----------|------|-----------|--------|------|
+| `ValidationException` | `VALIDATION_ERROR` | 400 | true | クライアント入力の不正（値オブジェクトのバリデーション失敗） |
+| `ConfigurationException` | `CONFIGURATION_ERROR` | 500 | false | 環境・構成の問題（authorizer 未設定、middleware 未登録） |
+| `InternalException` | `INTERNAL_ERROR` | 500 | false | 内部整合性違反・未実装（作成直後の findById 失敗） |
+
+将来インフラ層の実装が進んだ際に `InfrastructureException (503)` を追加する余地はあるが、今は存在しないエラーの型を作らない。
+
+#### エラーレスポンスの統一形式
+
+全エラーレスポンスを `{ code, message, traceId, payload? }` に統一する。AppException でもドメインエラーでも、クライアントは常に `code` でエラー種別を判定できる。
+
+```json
+// AppException 系
+{ "code": "VALIDATION_ERROR",     "message": "メールアドレスの形式が...", "traceId": "abc-123-..." }
+{ "code": "CONFIGURATION_ERROR",  "message": "Internal Server Error",    "traceId": "abc-123-..." }
+{ "code": "INTERNAL_ERROR",       "message": "Internal Server Error",    "traceId": "abc-123-..." }
+{ "code": "PARSE_ERROR",          "message": "Invalid request body...",  "traceId": "abc-123-..." }
+{ "code": "UNKNOWN_ERROR",        "message": "Internal Server Error",    "traceId": "abc-123-..." }
+
+// DomainError 系（Priority 7 で導入済み）
+{ "code": "USER_EMAIL_ALREADY_REGISTERED", "message": "...", "traceId": "abc-123-...", "payload": { "email": "..." } }
+```
+
+`expose = false` の例外（ConfigurationException, InternalException）はメッセージを `"Internal Server Error"` に置き換え、内部情報の漏洩を防ぐ。実際のメッセージはサーバー側ログにのみ記録する。
+
+#### traceId の伝搬設計
+
+traceId はクライアントが HTTP ヘッダーで送信する。未指定なら Lambda Authorizer が生成する。どちらの場合も Authorizer context に含まれて Lambda に届く（accessToken と同じ経路）。
+
+```
+Client (header) → Authorizer (context.traceId) → requestContextMiddleware → FunctionRequestContext.traceId
+  → ログ出力（logApp / logInfo / logWarn / logError）
+  → エラーレスポンス（appErrorHandler が traceId を付与）
+```
+
+traceId の注入は appErrorHandler ミドルウェアの1箇所に集約する。Lambda ハンドラは traceId を意識する必要がない。
+
+#### httpErrorHandler → appErrorHandler 置き換え
+
+middy の `httpErrorHandler` はレスポンスボディに `code` や `traceId` を含められない。`zodParseErrorHandler`（Zod の ParseError を 400 に変換していた自前ミドルウェア）の責務も含めて、単一の `appErrorHandler` に統合する。
+
+#### DomainErrorException によるドメインエラーの統合
+
+当初、Lambda ハンドラの `throwHttpError` が traceId を引数として要求する設計だった。しかし traceId は requestContext に既にあるため、ハンドラに traceId を意識させるのは冗長である。
+
+そこで `DomainErrorException`（`AppException` の派生）を導入し、ドメインエラーも throw → appErrorHandler で処理する経路に統合した。これにより traceId 注入がミドルウェアの1箇所に集約され、ハンドラは `throwHttpError(domainError, statusMap)` を呼ぶだけで済む。`throwHttpError` の戻り値型は `never` であり、関数名の `throw` プレフィックスとあわせて副作用を明示する。
+
+### 主な変更
+
+#### AppException 階層（`src/domains/commons/exceptions.ts`）
+
+```typescript
+export abstract class AppException extends Error {
+  abstract readonly code: string
+  abstract readonly statusCode: number
+  abstract readonly expose: boolean
+  readonly context: Record<string, unknown>
+
+  constructor(message: string, context: Record<string, unknown> = {}) {
+    super(message)
+    this.name = this.constructor.name
+    this.context = context
+  }
+}
+
+export class ValidationException extends AppException {
+  readonly code = 'VALIDATION_ERROR' as const
+  readonly statusCode = 400 as const
+  readonly expose = true as const
+}
+
+export class ConfigurationException extends AppException { /* 500, expose=false */ }
+export class InternalException extends AppException { /* 500, expose=false */ }
+```
+
+`context` はサーバー側ログ専用の構造化データ。`InternalException('NewUser not found', { userId: '123' })` のように、デバッグに必要な情報を渡す。クライアントには返さない。
+
+#### DomainErrorException（`src/domains/commons/exceptions.ts`）
+
+```typescript
+export class DomainErrorException extends AppException {
+  readonly code: string
+  readonly statusCode: number
+  readonly expose = true as const
+  readonly domainError: DomainError
+
+  constructor(domainError: DomainError, statusCode: number) {
+    super(domainError.message)
+    this.code = domainError.code
+    this.statusCode = statusCode
+    this.domainError = domainError
+  }
+}
+```
+
+`AppException` を継承するため `appErrorHandler` の既存ロジックで処理可能。`domainError` フィールドで payload にもアクセスでき、レスポンスボディに展開する。
+
+#### traceId 伝搬経路
+
+```
+src/schemas/lambdaAuthorizerSchema.ts        — context に traceId を追加
+src/domains/commons/IFunctionRequestContext.ts — traceId プロパティ追加
+src/runtime/functionRequestContext.ts          — コンストラクタ + 全ログメソッドに traceId
+src/runtime/mockFunctionRequestContext.ts      — traceId: 'mock-trace-id'
+src/middleware/requestContext.ts                — authorizer context から traceId を抽出
+```
+
+#### 統合エラーハンドラ（`src/middleware/appErrorHandler.ts`）
+
+```typescript
+export const appErrorHandler = (logger: Logger): MiddlewareObj<unknown, APIGatewayProxyResult> => ({
+  onError: async (request) => {
+    const traceId = request.context.requestContext?.traceId ?? 'unknown'
+    const body: Record<string, unknown> = { traceId }
+
+    if (error.name === 'ParseError') {         // Zod バリデーション失敗 → 400
+      body.code = 'PARSE_ERROR'
+    } else if (error instanceof DomainErrorException) {  // ドメインエラー → payload 展開
+      body.code = error.code
+      if ('payload' in error.domainError) body.payload = error.domainError.payload
+    } else if (error instanceof AppException) {          // 想定外エラー → expose で公開判定
+      body.code = error.code
+      body.message = error.expose ? error.message : 'Internal Server Error'
+    } else {                                             // 未知のエラー → 500
+      body.code = 'UNKNOWN_ERROR'
+    }
+    request.response = { statusCode, body: JSON.stringify(body) }
+  },
+})
+```
+
+`DomainErrorException` を `AppException` より先に判定する。両方 `instanceof AppException` に該当するが、ドメインエラーは payload の展開が必要なため専用の分岐を設けている。
+
+#### throwHttpError（`src/lambda/commons/httpResponse.ts`）
+
+```typescript
+export function throwHttpError<E extends DomainError>(
+  domainError: E,
+  statusMap: DomainErrorStatusMap<E>,
+): never {
+  throw new DomainErrorException(domainError, statusMap[domainError.code as E['code']])
+}
+```
+
+旧名 `httpDomainError` から `throwHttpError` にリネーム。`httpValue`（値を返す）との対比で、シグネチャの違い（`T` vs `never`）を関数名で表現する。
+
+#### 既存 throw サイトの移行
+
+| ファイル | 変更前 | 変更後 |
+|---------|--------|--------|
+| `StringValueObject.ts`, `email.ts`, `userId.ts`, `organizationId.ts` | `throw new Error(...)` | `throw new ValidationException(...)` |
+| `requestContext.ts`, `functionRequestContext.ts` | `throw new Error(...)` | `throw new ConfigurationException(...)` |
+| `createUser.ts`, `keycloakUserRepository.ts`, `postgresqlUserQueryRepository.ts` | `throw new Error(...)` | `throw new InternalException(...)` |
+| `DomainResult.ts` の `assertNever` | `throw new Error(...)` | `throw new InternalException(...)` |
+
+#### 削除
+
+- `src/middleware/zodParseErrorHandler.ts` — appErrorHandler に統合
+- `http-errors` / `@types/http-errors` / `@middy/http-error-handler` — パッケージ削除
+
+### 変更対象ファイル
+
+```
+src/
+├── domains/commons/
+│   ├── exceptions.ts                    [新規] AppException 階層 + DomainErrorException
+│   ├── exceptions.test.ts              [新規] 例外クラスの基本検証
+│   ├── DomainResult.ts                  assertNever → InternalException
+│   ├── IFunctionRequestContext.ts       traceId プロパティ追加
+│   └── StringValueObject.ts            throw → ValidationException
+├── domains/user/valueObjects/
+│   ├── email.ts                         throw → ValidationException
+│   └── userId.ts                        throw → ValidationException
+├── domains/organization/valueObjects/
+│   └── organizationId.ts               throw → ValidationException
+├── functions/userLogic/
+│   └── createUser.ts                    throw → InternalException（context 付き）
+├── infrastructures/
+│   ├── keycloak/keycloakUserRepository.ts    throw → InternalException
+│   └── postgresql/postgresqlUserQueryRepository.ts  同上
+├── lambda/
+│   ├── commons/httpResponse.ts          throwHttpError（DomainErrorException を throw）
+│   ├── commons/testEventTemplate.ts     traceId 追加
+│   ├── createUser/index.ts              throwHttpError 呼び出し（return 不要）
+│   ├── createUser/index.test.ts         traceId 追加
+│   ├── queryUsers/index.ts              同上
+│   └── queryUsers/index.test.ts         同上
+├── middleware/
+│   ├── appErrorHandler.ts              [新規] 統合エラーハンドラ
+│   ├── appErrorHandler.test.ts         [新規] エラー種別ごとのレスポンス検証
+│   ├── commonMiddleware.ts              appErrorHandler に置き換え
+│   ├── requestContext.ts                traceId 抽出 + ConfigurationException + ログ強化
+│   └── zodParseErrorHandler.ts         [削除] appErrorHandler に統合
+├── runtime/
+│   ├── functionRequestContext.ts         traceId フィールド + 全ログに traceId
+│   └── mockFunctionRequestContext.ts    traceId: 'mock-trace-id'
+└── schemas/
+    └── lambdaAuthorizerSchema.ts        context に traceId 追加
+```
+
+### 効果
+
+- **エラー種別の構造化**: 全 throw サイトが3種の例外クラスに分類され、`code` / `statusCode` / `expose` が型レベルで固定される。`throw new Error('...')` のような非構造化エラーが排除された
+- **エラーレスポンスの統一**: ドメインエラー・想定外エラー・パースエラー・未知のエラーすべてが `{ code, message, traceId, payload? }` 形式で返る。クライアントは常に `code` フィールドでエラー種別を判定できる
+- **traceId による運用支援**: 全エラーレスポンスに traceId を含めることで、クライアントからの問い合わせ時にログを特定できる。全ログ出力にも traceId が含まれるため、リクエスト単位でのログ追跡が可能
+- **traceId 注入の集約**: traceId は appErrorHandler ミドルウェアの1箇所で注入される。Lambda ハンドラは traceId を意識する必要がなく、`throwHttpError(domainError, statusMap)` を呼ぶだけでよい
+- **情報漏洩の防止**: `expose = false` の例外はメッセージを `"Internal Server Error"` に置き換え。実際のメッセージ（構成情報や内部状態）はサーバー側ログにのみ記録される
+- **ミドルウェアの統合**: `httpErrorHandler` + `zodParseErrorHandler` を `appErrorHandler` に統合し、エラー処理の分散を解消。`http-errors` パッケージへの依存も除去
+
 ## テスト結果
 
-全16ファイル・62テストがパス。各 Priority 実装後にテスト全パス・TypeScript 型チェック通過を確認済み。
+全18ファイル・76テストがパス。各 Priority 実装後にテスト全パス・TypeScript 型チェック通過を確認済み。
