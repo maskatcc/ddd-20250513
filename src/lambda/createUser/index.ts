@@ -10,7 +10,7 @@ import { OrganizationId } from '../../domains/organization/organization.js'
 import { Email, UserName } from '../../domains/user/user.js'
 import { KeycloakUserRepository } from '../../infrastructures/keycloak/keycloakUserRepository.js'
 import { CreateUserEvent, CreateUserEventSchema } from './schema.js'
-import { httpValue, httpDomainError, DomainErrorStatusMap } from '../commons/httpResponse.js'
+import { httpValue, throwHttpError, DomainErrorStatusMap } from '../commons/httpResponse.js'
 
 // モジュールスコープで初期化（warm invocationで再利用）
 const moduleContext = await FunctionModuleContext.create()
@@ -35,7 +35,7 @@ async function lambdaHandler(event: CreateUserEvent, lambdaContext: LambdaContex
   }
   const result = await createUser(depsFactory)(context, input)
   if (!result.successful) {
-    throw httpDomainError(result.domainError, {} satisfies DomainErrorStatusMap<never>)
+    throwHttpError(result.domainError, {} satisfies DomainErrorStatusMap<never>)
   }
 
   return httpValue({ userId: result.domainValue.value })

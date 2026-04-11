@@ -1,3 +1,5 @@
+import type { DomainError } from './DomainResult.js'
+
 /**
  * 想定外エラーの例外型階層。
  *
@@ -41,4 +43,19 @@ export class InternalException extends AppException {
   readonly code = 'INTERNAL_ERROR' as const
   readonly statusCode = 500 as const
   readonly expose = false as const
+}
+
+/** ドメインエラーを HTTP レスポンスに変換するための例外。appErrorHandler が処理する */
+export class DomainErrorException extends AppException {
+  readonly code: string
+  readonly statusCode: number
+  readonly expose = true as const
+  readonly domainError: DomainError
+
+  constructor(domainError: DomainError, statusCode: number) {
+    super(domainError.message)
+    this.code = domainError.code
+    this.statusCode = statusCode
+    this.domainError = domainError
+  }
 }

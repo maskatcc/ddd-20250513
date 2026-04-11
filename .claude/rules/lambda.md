@@ -41,5 +41,5 @@ paths: ['src/lambda/**']
 ## DomainResult → HTTP変換
 
 - 成功は `httpValue(value)` でレスポンスを返す
-- 失敗は `httpDomainError(domainError, statusMap)` を throw する
+- 失敗は `throwHttpError(domainError, statusMap)` を呼び出して throw する
 - `DomainErrorStatusMap<E>` でエラーコードとHTTPステータスの対応を型で網羅する

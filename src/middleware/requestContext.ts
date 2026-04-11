@@ -1,5 +1,6 @@
 import type { MiddlewareObj } from '@middy/core'
 import type { APIGatewayProxyResult } from 'aws-lambda'
+import { AppException, ConfigurationException } from '../domains/commons/exceptions.js'
 import { FunctionModuleContext } from '../runtime/functionModuleContext.js'
 import { createRequestContext } from '../runtime/functionRequestContext.js'
 
@@ -17,15 +18,15 @@ export const requestContextMiddleware = (
     }
     const lambdaAuth = event.requestContext?.authorizer?.lambda
     if (!lambdaAuth) {
-      throw new Error('Lambda authorizer is not configured for this function')
+      throw new ConfigurationException('Lambda authorizer is not configured for this function')
     }
     const accessToken = lambdaAuth.context?.accessToken
     if (!accessToken) {
-      throw new Error('accessToken is missing in authorizer context')
+      throw new ConfigurationException('accessToken is missing in authorizer context')
     }
     const traceId = lambdaAuth.context?.traceId
     if (!traceId) {
-      throw new Error('traceId is missing in authorizer context')
+      throw new ConfigurationException('traceId is missing in authorizer context')
     }
 
     const ctx = createRequestContext(moduleContext, request.context, {
@@ -43,6 +44,10 @@ export const requestContextMiddleware = (
   },
   onError: async (request) => {
     const ctx = request.context.requestContext
-    ctx?.logApp({ event: 'request.error', error: request.error ?? undefined })
+    const error = request.error
+    if (ctx && error instanceof AppException) {
+      ctx.logError(`${error.name}: ${error.message}`, error, error.context)
+    }
+    ctx?.logApp({ event: 'request.error', error: error ?? undefined })
   },
 })

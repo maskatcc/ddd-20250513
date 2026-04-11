@@ -1,5 +1,5 @@
 import { appErrorHandler } from './appErrorHandler.js'
-import { ValidationException, ConfigurationException, InternalException } from '../domains/commons/exceptions.js'
+import { ValidationException, ConfigurationException, InternalException, DomainErrorException } from '../domains/commons/exceptions.js'
 
 const mockLogger = {
   error: vi.fn(),
@@ -110,6 +110,40 @@ describe('appErrorHandler', () => {
       expect(body.code).toBe('UNKNOWN_ERROR')
       expect(body.message).toBe('Internal Server Error')
       expect(body.traceId).toBe('trace-unknown')
+    })
+  })
+
+  describe('DomainErrorException', () => {
+    it('ドメインエラーの code / message / statusCode でレスポンスを生成する', async () => {
+      const domainError = { code: 'USER_NOT_FOUND', message: 'ユーザーが見つかりません' }
+      const request = createRequest(new DomainErrorException(domainError, 404), 'trace-domain')
+
+      await handler.onError!(request as never)
+
+      const response = request.response as { statusCode: number, body: string }
+      expect(response.statusCode).toBe(404)
+
+      const body = JSON.parse(response.body)
+      expect(body.code).toBe('USER_NOT_FOUND')
+      expect(body.message).toBe('ユーザーが見つかりません')
+      expect(body.traceId).toBe('trace-domain')
+      expect(body.payload).toBeUndefined()
+    })
+
+    it('payload 付きドメインエラーはレスポンスに payload を含める', async () => {
+      const domainError = { code: 'EMAIL_TAKEN', message: '登録済み', payload: { email: 'a@b.com' } }
+      const request = createRequest(new DomainErrorException(domainError, 409), 'trace-payload')
+
+      await handler.onError!(request as never)
+
+      const response = request.response as { statusCode: number, body: string }
+      expect(response.statusCode).toBe(409)
+
+      const body = JSON.parse(response.body)
+      expect(body.code).toBe('EMAIL_TAKEN')
+      expect(body.message).toBe('登録済み')
+      expect(body.traceId).toBe('trace-payload')
+      expect(body.payload).toEqual({ email: 'a@b.com' })
     })
   })
 
