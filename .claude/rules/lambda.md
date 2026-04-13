@@ -43,3 +43,4 @@ paths: ['src/lambda/**']
 - 成功は `httpValue(value)` でレスポンスを返す
 - 失敗は `throwHttpError(domainError, statusMap)` を呼び出して throw する
 - `DomainErrorStatusMap<E>` でエラーコードとHTTPステータスの対応を型で網羅する
+- AppException のハンドリングは `appErrorHandler` ミドルウェアが行う（→ [error-handling](error-handling.md)）
