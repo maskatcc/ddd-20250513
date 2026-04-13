@@ -26,4 +26,4 @@ paths: ['src/functions/**']
 - 戻り値は `Promise<DomainResult<T, E>>` にする
 - 成功は `succeed(value)`、失敗は `fail(domainError)` で返す
 - ドメインエラーを分岐処理するときは `switch` で網羅し、default で `assertNever()` を呼ぶ
-- 例外（throw）はシステムエラー（予期しない失敗）のみに使う。ドメインの失敗は `fail()` で返す
+- 例外（throw）はシステムエラー（予期しない失敗）のみに使う。ドメインの失敗は `fail()` で返す（→ [error-handling](error-handling.md)）

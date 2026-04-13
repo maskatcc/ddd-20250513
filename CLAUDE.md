@@ -33,7 +33,7 @@ src/
 
 - テストは `it()` を使う（`test()` は使わない）
 - エンティティの復元は `static reconstruct()` を使う（新規作成は `new` またはcreateファクトリ）
-- エラーは `DomainResult` 型で表現する
+- エラーハンドリングは DomainResult（ビジネスエラー）と AppException（システムエラー）の二系統
 
 ## コマンド
 

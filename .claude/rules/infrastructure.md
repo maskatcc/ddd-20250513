@@ -15,6 +15,7 @@ paths: ['src/infrastructures/**', 'src/runtime/**']
 - constructor で `Gateway` と `IFunctionRequestContext` を `private readonly` で受け取る
 - 永続化データからエンティティを復元する場合は `static reconstruct()` を使う
 - 戻り値はユースケース層と同様に `DomainResult<T, E>` にする
+- 外部サービスの業務エラーは `DomainError` に変換する。想定外のシステムエラーは `InternalException` に変換する（→ [error-handling](error-handling.md)）
 - リポジトリ固有の型は他のリポジトリと共有せずインフラ層に閉じ込める
 
 ## Gateway

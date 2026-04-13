@@ -8,7 +8,7 @@ paths: ['src/domains/**']
 - 基底クラスは `ImmutableValueObject<T>` を継承する
 - 文字列値は `StringValueObject`（`ImmutableValueObject<string>` の派生）を継承する
   - 必須チェックは `RequiredSpec` を、長さチェックは `LengthSpec` を実装する
-  - バリデーション失敗は constructor で `throw new Error()` する
+  - バリデーション失敗は constructor で `throw new ValidationException()` する（→ [error-handling](error-handling.md)）
   - パース試行は `static tryParse()` を使う（失敗時は `undefined` を返す）
 
 ## エンティティ
@@ -26,6 +26,7 @@ paths: ['src/domains/**']
 - 成功は `succeed(value)`、失敗は `fail(domainError)` で返す
 - ドメイン関数の戻り値は `DomainResult<T, E>` にする
 - 予期しないエラーコードは `assertNever()` で網羅チェックする
+- 例外（throw）によるエラー処理は → [error-handling](error-handling.md) を参照
 
 ## リポジトリインターフェース
 
